@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "backtrader": {
+      "source": "lzwme/finance-quant-skills",
+      "sourceType": "github",
+      "skillPath": "skills/backtrader/SKILL.md",
+      "computedHash": "60f2d71457a068dec6cca69fcbd8847dddb639643780394dce4008efa3a00638"
+    }
+  }
+}

@@ -1,0 +1,70 @@
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+{ 名称：ATR止盈参考（副图）      }
+{ 周期：5分钟                    }
+{ 参数：ATR=14  通道N=60         }
+{ 开仓字幕与主图/CCI一致         }
+{ 平仓：反向变色 + ATR分批止盈   }
+{ 三图同时出现「开/平」字再动手  }
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+
+N:=14;
+P:=15;
+M:=4;
+N通道:=60;
+
+TR1:=MAX(HIGH-LOW,MAX(ABS(HIGH-REF(CLOSE,1)),ABS(LOW-REF(CLOSE,1))));
+ATR:MA(TR1,N),COLORWHITE,LINETHICK2;
+
+止盈3倍:ATR*3,COLORRED,DOTLINE;
+止盈6倍:ATR*6,COLORYELLOW,DOTLINE;
+止盈9倍:ATR*9,COLORGREEN,DOTLINE;
+
+{ ——— 与主图相同的开仓逻辑 ——— }
+上轨:=MA(HIGH,N通道);
+下轨:=MA(LOW,N通道);
+侧:=IF(CLOSE>上轨,1,IF(CLOSE<下轨,-1,0));
+色值:=VALUEWHEN(侧<>0,侧);
+变红:=色值=1 AND REF(色值,1)<>1;
+变绿:=色值=-1 AND REF(色值,1)<>-1;
+
+TYP:=(HIGH+LOW+CLOSE)/3;
+CCI线:=(TYP-MA(TYP,P))/(0.015*AVEDEV(TYP,P));
+CCI均:=MA(CCI线,M);
+金叉:=CROSS(CCI线,CCI均);
+死叉:=CROSS(CCI均,CCI线);
+距变红:=BARSLAST(变红);
+距变绿:=BARSLAST(变绿);
+
+开多:=金叉 AND 色值=1 AND 距变红<距变绿;
+开空:=死叉 AND 色值=-1 AND 距变绿<距变红;
+
+{ 最近一次开仓价与方向（近似持仓状态） }
+入场价:=VALUEWHEN(开多 OR 开空,CLOSE);
+持多:=BARSLAST(开多)<BARSLAST(开空);
+持空:=BARSLAST(开空)<BARSLAST(开多);
+
+{ 反向变色平剩余 }
+平多色:=变绿 AND 持多;
+平空色:=变红 AND 持空;
+
+{ ATR 分批止盈（收盘触及，相对最近开仓价滚动） }
+目标3多:=入场价+3*ATR;
+目标6多:=入场价+6*ATR;
+目标9多:=入场价+9*ATR;
+目标3空:=入场价-3*ATR;
+目标6空:=入场价-6*ATR;
+目标9空:=入场价-9*ATR;
+
+止盈多:=持多 AND (CLOSE>=目标3多 OR CLOSE>=目标6多 OR CLOSE>=目标9多);
+止盈空:=持空 AND (CLOSE<=目标3空 OR CLOSE<=目标6空 OR CLOSE<=目标9空);
+
+平多:=平多色 OR 止盈多;
+平空:=平空色 OR 止盈空;
+
+{ 字幕 }
+DRAWTEXT(开多,ATR,'开多'),COLORRED;
+DRAWTEXT(开空,ATR,'开空'),COLORGREEN;
+DRAWTEXT(平多,ATR,'平多'),COLORGREEN;
+DRAWTEXT(平空,ATR,'平空'),COLORRED;
+
+{ ATR 数值看输出线图例即可；同花顺不支持 STRCAT/通达信式 DRAWNUMBER }

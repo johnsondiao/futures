@@ -1,0 +1,45 @@
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+{ 名称：CCI确认开仓（副图）      }
+{ 周期：5分钟 | 用法：副图       }
+{ P=15 CCI周期  M=4 信号均线     }
+{ N通道=60 与主图通道一致        }
+{ 字幕与主图一致：开多/开空/平  }
+{ 三图同时出现「开/平」字再动手  }
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+
+P:=15;
+M:=4;
+N通道:=60;
+
+TYP:=(HIGH+LOW+CLOSE)/3;
+CCI:(TYP-MA(TYP,P))/(0.015*AVEDEV(TYP,P)),COLORWHITE,LINETHICK2;
+CCI均:MA(CCI,M),COLORYELLOW,LINETHICK1;
+
+金叉:=CROSS(CCI,CCI均);
+死叉:=CROSS(CCI均,CCI);
+
+上轨:=MA(HIGH,N通道);
+下轨:=MA(LOW,N通道);
+侧:=IF(CLOSE>上轨,1,IF(CLOSE<下轨,-1,0));
+色值:=VALUEWHEN(侧<>0,侧);
+
+变红:=色值=1 AND REF(色值,1)<>1;
+变绿:=色值=-1 AND REF(色值,1)<>-1;
+距变红:=BARSLAST(变红);
+距变绿:=BARSLAST(变绿);
+
+开多:=金叉 AND 色值=1 AND 距变红<距变绿;
+开空:=死叉 AND 色值=-1 AND 距变绿<距变红;
+
+{ 反向变色 = 剩余仓平仓提醒 }
+平多:=变绿;
+平空:=变红;
+
+DRAWICON(开多,CCI,1);
+DRAWICON(开空,CCI,2);
+DRAWTEXT(开多,CCI,'开多'),COLORRED;
+DRAWTEXT(开空,CCI,'开空'),COLORGREEN;
+DRAWTEXT(平多,CCI,'平多'),COLORGREEN;
+DRAWTEXT(平空,CCI,'平空'),COLORRED;
+
+0,DOTLINE,COLORGRAY;

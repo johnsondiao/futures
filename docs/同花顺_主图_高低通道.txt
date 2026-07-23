@@ -1,0 +1,95 @@
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+{ 名称：高低通道+开平仓横线（主图）}
+{ 周期：5分钟 | 用法：主图叠加     }
+{ N=60 通道  P=15/M=4 CCI  ATR=14 }
+{ 横线：开仓价 / ATR止盈 / 平仓价 }
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+
+N:=60;
+P:=15;
+M:=4;
+ATRN:=14;
+
+{ ——— 通道 ——— }
+上轨:MA(HIGH,N),COLORWHITE,LINETHICK1;
+下轨:MA(LOW,N),COLORWHITE,LINETHICK1;
+
+侧:=IF(CLOSE>上轨,1,IF(CLOSE<下轨,-1,0));
+色值:=VALUEWHEN(侧<>0,侧);
+
+上轨红:IF(色值>0,上轨,DRAWNULL),COLORRED,LINETHICK2;
+下轨红:IF(色值>0,下轨,DRAWNULL),COLORRED,LINETHICK2;
+上轨绿:IF(色值<0,上轨,DRAWNULL),COLORGREEN,LINETHICK2;
+下轨绿:IF(色值<0,下轨,DRAWNULL),COLORGREEN,LINETHICK2;
+
+变红:=色值=1 AND REF(色值,1)<>1;
+变绿:=色值=-1 AND REF(色值,1)<>-1;
+
+{ ——— CCI 开仓 ——— }
+TYP:=(HIGH+LOW+CLOSE)/3;
+CCI线:=(TYP-MA(TYP,P))/(0.015*AVEDEV(TYP,P));
+CCI均:=MA(CCI线,M);
+金叉:=CROSS(CCI线,CCI均);
+死叉:=CROSS(CCI均,CCI线);
+距变红:=BARSLAST(变红);
+距变绿:=BARSLAST(变绿);
+
+开多:=金叉 AND 色值=1 AND 距变红<距变绿;
+开空:=死叉 AND 色值=-1 AND 距变绿<距变红;
+
+{ ——— ATR ——— }
+TR1:=MAX(HIGH-LOW,MAX(ABS(HIGH-REF(CLOSE,1)),ABS(LOW-REF(CLOSE,1))));
+ATR:=MA(TR1,ATRN);
+
+{ ——— 持仓状态（最近开仓 vs 最近平仓） ——— }
+{ 先算反向变色平，再与 ATR 止盈合并得到平仓 }
+入场价:=VALUEWHEN(开多 OR 开空,CLOSE);
+持多粗:=BARSLAST(开多)<BARSLAST(开空);
+持空粗:=BARSLAST(开空)<BARSLAST(开多);
+
+目标3多:=入场价+3*ATR;
+目标6多:=入场价+6*ATR;
+目标9多:=入场价+9*ATR;
+目标3空:=入场价-3*ATR;
+目标6空:=入场价-6*ATR;
+目标9空:=入场价-9*ATR;
+
+{ 反向变色平剩余 }
+平多色:=变绿 AND 持多粗;
+平空色:=变红 AND 持空粗;
+
+{ ATR 分批触及（收盘）——任一档触及即标平仓提醒 }
+止盈多:=持多粗 AND (CLOSE>=目标3多 OR CLOSE>=目标6多 OR CLOSE>=目标9多);
+止盈空:=持空粗 AND (CLOSE<=目标3空 OR CLOSE<=目标6空 OR CLOSE<=目标9空);
+
+平多:=平多色 OR 止盈多;
+平空:=平空色 OR 止盈空;
+
+{ 更干净的持仓：开仓后尚未出现对应平仓 }
+持多:=BARSLAST(开多)<BARSLAST(平多) AND BARSLAST(开多)<=BARSLAST(开空);
+持空:=BARSLAST(开空)<BARSLAST(平空) AND BARSLAST(开空)<=BARSLAST(开多);
+持仓:=持多 OR 持空;
+
+平仓价:=VALUEWHEN(平多 OR 平空,CLOSE);
+
+{ ========== 横向价位线 ========== }
+{ 1) 开仓价横线：持仓期间水平画出 }
+开仓线:IF(持仓,入场价,DRAWNULL),COLORWHITE,LINETHICK2;
+
+{ 2) ATR 止盈目标横线（相对开仓价，ATR 滚动） }
+止盈3:IF(持多,入场价+3*ATR,IF(持空,入场价-3*ATR,DRAWNULL)),COLORRED,DOTLINE,LINETHICK1;
+止盈6:IF(持多,入场价+6*ATR,IF(持空,入场价-6*ATR,DRAWNULL)),COLORYELLOW,DOTLINE,LINETHICK1;
+止盈9:IF(持多,入场价+9*ATR,IF(持空,入场价-9*ATR,DRAWNULL)),COLORGREEN,DOTLINE,LINETHICK1;
+
+{ 3) 平仓价横线：平仓当根及之后若干根标出，便于对照 }
+平仓线:IF(BARSLAST(平多 OR 平空)<=8,平仓价,DRAWNULL),COLORMAGENTA,LINETHICK2;
+
+{ ========== 字幕 / 图标 ========== }
+DRAWTEXT(开多,LOW,'开多'),COLORRED;
+DRAWTEXT(开空,HIGH,'开空'),COLORGREEN;
+DRAWTEXT(平多,HIGH,'平多'),COLORGREEN;
+DRAWTEXT(平空,LOW,'平空'),COLORRED;
+DRAWICON(开多,LOW,1);
+DRAWICON(开空,HIGH,2);
+DRAWICON(平多,HIGH,2);
+DRAWICON(平空,LOW,1);
