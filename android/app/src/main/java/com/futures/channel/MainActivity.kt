@@ -11,7 +11,6 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
-import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -19,6 +18,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.material.textfield.TextInputEditText
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -29,9 +29,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var swipe: SwipeRefreshLayout
     private lateinit var statusText: TextView
     private lateinit var boardRoot: LinearLayout
-    private lateinit var loginRoot: LinearLayout
-    private lateinit var userInput: EditText
-    private lateinit var passInput: EditText
+    private lateinit var loginRoot: View
+    private lateinit var userInput: TextInputEditText
+    private lateinit var passInput: TextInputEditText
     private lateinit var loginError: TextView
 
     private val mainHandler = Handler(Looper.getMainLooper())

@@ -1,11 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ChannelStrategy" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#2EC4D6</item>
-        <item name="colorPrimaryVariant">#0F1419</item>
+    <style name="Theme.ChannelStrategy" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#00838F</item>
+        <item name="colorPrimaryVariant">#006064</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="android:statusBarColor">#0F1419</item>
-        <item name="android:navigationBarColor">#0F1419</item>
-        <item name="android:windowBackground">#0F1419</item>
+        <item name="colorSecondary">#455A64</item>
+        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSurface">#FFFFFF</item>
+        <item name="colorOnSurface">#15202B</item>
+        <item name="android:statusBarColor">#F5F7FA</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:textColorPrimary">#15202B</item>
+        <item name="android:textColorHint">#90A4AE</item>
+        <item name="editTextColor">#15202B</item>
     </style>
 </resources>

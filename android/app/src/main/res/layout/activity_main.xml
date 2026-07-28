@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#FFFFFF">
@@ -19,7 +20,7 @@
             android:paddingHorizontal="12dp"
             android:paddingVertical="6dp"
             android:text="@string/status_idle"
-            android:textColor="#6B7785"
+            android:textColor="#455A64"
             android:textSize="12sp" />
 
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -35,60 +36,97 @@
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
     </LinearLayout>
 
-    <LinearLayout
+    <ScrollView
         android:id="@+id/loginRoot"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:padding="24dp">
+        android:fillViewport="true">
 
-        <TextView
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingBottom="8dp"
-            android:text="@string/login_title"
-            android:textColor="#15202B"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:padding="24dp">
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingBottom="20dp"
-            android:text="@string/login_hint"
-            android:textColor="#6B7785"
-            android:textSize="13sp" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="8dp"
+                android:text="@string/login_title"
+                android:textColor="#15202B"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
-        <EditText
-            android:id="@+id/userInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/user_hint"
-            android:inputType="textEmailAddress"
-            android:singleLine="true" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="20dp"
+                android:text="@string/login_hint"
+                android:textColor="#607D8B"
+                android:textSize="13sp" />
 
-        <EditText
-            android:id="@+id/passInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/pass_hint"
-            android:inputType="textPassword"
-            android:singleLine="true" />
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/userLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/user_hint"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#00838F"
+                app:hintTextColor="#00838F">
 
-        <Button
-            android:id="@+id/btnLogin"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="@string/login" />
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/userInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textVisiblePassword|textNoSuggestions"
+                    android:singleLine="true"
+                    android:textColor="#15202B"
+                    android:textColorHint="#90A4AE"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
 
-        <TextView
-            android:id="@+id/loginError"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="10dp"
-            android:textColor="#C62828"
-            android:textSize="13sp" />
-    </LinearLayout>
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/passLayout"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:hint="@string/pass_hint"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="#00838F"
+                app:endIconMode="password_toggle"
+                app:endIconTint="#455A64"
+                app:hintTextColor="#00838F">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/passInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="textPassword"
+                    android:singleLine="true"
+                    android:textColor="#15202B"
+                    android:textColorHint="#90A4AE"
+                    android:textSize="16sp" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogin"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="20dp"
+                android:text="@string/login"
+                android:textSize="16sp"
+                app:cornerRadius="10dp" />
+
+            <TextView
+                android:id="@+id/loginError"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingTop="12dp"
+                android:textColor="#C62828"
+                android:textSize="13sp" />
+        </LinearLayout>
+    </ScrollView>
 </FrameLayout>
