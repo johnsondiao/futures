@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity() {
             val user = userInput.text.toString().trim()
             val pass = passInput.text.toString()
             if (user.isEmpty() || pass.isEmpty()) {
-                loginError.text = "请填写快期账户和密码"
+                loginError.text = "请填写天勤账号和密码"
                 return@setOnClickListener
             }
             loginError.text = "登录中…"

@@ -6,7 +6,7 @@
 
 ```
 安卓 App
-  ├─ 登录快期账号（EncryptedSharedPreferences 存本机）
+  ├─ 登录天勤账号（与快期同一套；EncryptedSharedPreferences 存本机）
   ├─ OkHttp WebSocket 直连天勤 DIFF 行情网关
   ├─ assets/www：K 线盘面 + JS 策略引擎
   └─ 输出：条件单（开仓/止盈1–3/止损）+ 机会评估
@@ -17,7 +17,7 @@
 ## 使用
 
 1. GitHub Actions 编译 APK 并安装
-2. 打开 App，输入快期账户/密码登录
+2. 打开 App，输入天勤账号/密码登录（与快期账号相同）
 3. 等待行情连接后查看盘面；下拉可重连
 
 默认合约：`DCE.a2609`，周期：5 分钟。

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">通道策略</string>
-    <string name="login_title">快期账号登录</string>
-    <string name="login_hint">App 在本机直连天勤行情并计算条件单，账号只保存在手机本地。</string>
-    <string name="user_hint">快期账户（手机号/邮箱/用户名）</string>
+    <string name="login_title">天勤账号登录</string>
+    <string name="login_hint">使用天勤/快期同一套账号（手机号、邮箱或用户名）。账号只保存在本机，用于拉取行情。</string>
+    <string name="user_hint">天勤账号（手机号/邮箱/用户名）</string>
     <string name="pass_hint">密码</string>
     <string name="login">登录并开始</string>
     <string name="status_idle">未连接</string>
