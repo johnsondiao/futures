@@ -11,13 +11,19 @@ android {
         applicationId = "com.futures.channel"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "2.0.0"
+        versionCode = 3
+        versionName = "2.0.1"
+    }
+
+    // 个人分发：用 debug 密钥签 release，避免产出 unsigned APK 导致手机「解析软件包失败」
+    signingConfigs {
+        getByName("debug")
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

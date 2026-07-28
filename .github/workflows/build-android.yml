@@ -24,19 +24,38 @@ jobs:
           distribution: temurin
           java-version: "17"
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
 
       - name: Create Gradle Wrapper
         run: |
           gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
-      - name: Build Release APK
+      - name: Build signed Release APK
         run: ./gradlew assembleRelease
+
+      - name: Verify APK is signed
+        run: |
+          set -euo pipefail
+          APK=$(ls -1 app/build/outputs/apk/release/*.apk | head -n1)
+          echo "APK=$APK"
+          ls -lh "$APK"
+          if echo "$APK" | grep -qi unsigned; then
+            echo "ERROR: unsigned APK produced — phone install will fail"
+            exit 1
+          fi
+          unzip -l "$APK" | grep -E 'META-INF/.*\.(RSA|DSA|EC)' 
+          echo "APK signature entries OK"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: channel-strategy-apk
           path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: error

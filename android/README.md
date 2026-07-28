@@ -24,11 +24,11 @@
 
 ## GitHub Actions 编译
 
-1. 推送 `android/` 相关改动
-2. Actions → **Build Android APK** → 等待完成
-3. 下载 Artifact：`channel-strategy-apk`
+1. 推送 `android/` 相关改动，或 Actions → **Build Android APK** → Run workflow
+2. 下载 Artifact：`channel-strategy-apk`
+3. 解压后安装 **不带 `unsigned` 字样** 的 `.apk`（应已用 debug 密钥签名，可直接装）
 
-也可：Actions → Run workflow 手动触发。
+若手机提示「解析软件包时出现问题 / packageInfo is null」，通常是下到了未签名包或文件损坏，请重新下载本次构建产物。
 
 ## 电脑调试（可选）
 
