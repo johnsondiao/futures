@@ -11,13 +11,8 @@ android {
         applicationId = "com.futures.channel"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
-
-        // 默认连本机调试；GitHub Actions / 发版可 -PSERVER_URL=https://your.host 覆盖
-        val serverUrl = project.findProperty("SERVER_URL") as String?
-            ?: "http://10.0.2.2:8080"
-        buildConfigField("String", "SERVER_URL", "\"$serverUrl\"")
+        versionCode = 2
+        versionName = "2.0.0"
     }
 
     buildTypes {
@@ -53,4 +48,6 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }

@@ -16,6 +16,7 @@ tmp/
 *.png
 *.html
 !server/**/*.html
+!android/**/*.html
 
 .evolver/
 android/.gradle/

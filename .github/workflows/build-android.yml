@@ -2,11 +2,6 @@ name: Build Android APK
 
 on:
   workflow_dispatch:
-    inputs:
-      server_url:
-        description: "App 默认服务地址（可在手机里再改）"
-        required: false
-        default: "http://10.0.2.2:8080"
   push:
     paths:
       - "android/**"
@@ -38,9 +33,7 @@ jobs:
           chmod +x gradlew
 
       - name: Build Release APK
-        run: |
-          ./gradlew assembleRelease \
-            -PSERVER_URL="${{ github.event.inputs.server_url || 'http://10.0.2.2:8080' }}"
+        run: ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
