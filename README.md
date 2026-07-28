@@ -28,8 +28,8 @@ copy .env.example .env            # 填入快期账号密码
 python scripts/run_backtest.py --symbol DCE.a2609 --period 5m
 python scripts/export_chart.py --symbol DCE.a2609 --period 5m --open
 python scripts/ths_indicator_sim.py --bars 500 --open
-python scripts/run_ths_live.py --host 0.0.0.0 --port 8080   # 手机 App / 浏览器实时盘
+python scripts/run_ths_live.py --host 0.0.0.0 --port 8080   # 可选：电脑浏览器对照盘面
 ```
 
 回测图：`data/reports/DCE_a2609_5m_chart.html`  
-安卓 App：见 [`android/README.md`](android/README.md)（GitHub Actions 编译 APK）
+安卓 App：见 [`android/README.md`](android/README.md)（本机直连天勤，GitHub Actions 编译 APK）
