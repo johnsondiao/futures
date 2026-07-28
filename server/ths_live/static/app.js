@@ -445,7 +445,19 @@
   function roleClass(role) {
     if (role && String(role).startsWith("止盈")) return "tp";
     if (role === "止损") return "sl";
+    if (role === "开多仓" || role === "开空仓" || role === "开仓") return "entry";
     return "entry";
+  }
+
+  function isEntryOrder(o) {
+    return o && (o.role === "开多仓" || o.role === "开空仓" || o.role === "开仓");
+  }
+
+  function entryTitle(o) {
+    if (o.direction) return o.direction;
+    if (o.role === "开多仓" || o.side === "买开") return "开多仓";
+    if (o.role === "开空仓" || o.side === "卖开") return "开空仓";
+    return "开仓";
   }
 
   function renderOrder(status) {
@@ -469,21 +481,40 @@
     for (const o of orders) {
       const div = document.createElement("div");
       div.className = "order-row " + roleClass(o.role);
+      const price = o.price != null ? Number(o.price).toFixed(0) : "--";
       const distPts = o.distance_points != null ? `${o.distance_points}点` : "";
       const distAtr = o.distance_atr != null ? ` · ${o.distance_atr}ATR` : "";
-      const cmp = o.op || o.cmp || (o.text || "").split(/\s+/)[0] || "";
-      div.innerHTML = `
-        <div class="order-role">${o.role || ""}</div>
-        <div class="order-mid">
-          <div class="order-cmp">${cmp} · ${o.side || ""}</div>
-          <div class="order-price">${o.price != null ? Number(o.price).toFixed(0) : "--"}</div>
-          <div class="order-dist">${distPts}${distAtr}</div>
-        </div>
-        <div class="order-side">
-          <div>${o.side || ""}</div>
-          <div class="order-lots">${o.lots != null ? o.lots + "手" : ""}</div>
-        </div>
-      `;
+
+      if (isEntryOrder(o)) {
+        const title = entryTitle(o);
+        div.className += " entry-main";
+        div.innerHTML = `
+          <div class="order-role">${title}</div>
+          <div class="order-mid">
+            <div class="order-cmp">开仓价格</div>
+            <div class="order-price">${price}</div>
+            <div class="order-dist">${o.op || ""} · ${o.lots != null ? o.lots + "手" : ""}${distPts ? " · " + distPts : ""}${distAtr}</div>
+          </div>
+          <div class="order-side">
+            <div class="order-dir">${title}</div>
+            <div class="order-lots">${o.lots != null ? o.lots + "手" : ""}</div>
+          </div>
+        `;
+      } else {
+        const cmp = o.op || o.cmp || (o.text || "").split(/\s+/)[0] || "";
+        div.innerHTML = `
+          <div class="order-role">${o.role || ""}</div>
+          <div class="order-mid">
+            <div class="order-cmp">${cmp} · ${o.side || ""}</div>
+            <div class="order-price">${price}</div>
+            <div class="order-dist">${distPts}${distAtr}</div>
+          </div>
+          <div class="order-side">
+            <div>${o.side || ""}</div>
+            <div class="order-lots">${o.lots != null ? o.lots + "手" : ""}</div>
+          </div>
+        `;
+      }
       el.orderList.appendChild(div);
     }
   }

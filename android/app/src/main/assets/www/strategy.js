@@ -465,12 +465,13 @@
       summary = "需要设条件单：开多 3 手";
       if (entry != null) {
         orders.push({
-          role: "开仓",
+          role: "开多仓",
           side: "买开",
+          direction: "开多仓",
           lots: 3,
           op: "大于等于",
           price: entry,
-          text: "最新价 ≥ " + entry.toFixed(0) + " → 开多 3 手",
+          text: "开多仓，开仓价格 " + entry.toFixed(0) + "（最新价 ≥ " + entry.toFixed(0) + " 买开 3 手）",
         });
       }
       addTps(orders, "卖平", "大于等于", true);
@@ -491,12 +492,13 @@
       summary = "需要设条件单：开空 3 手";
       if (entry != null) {
         orders.push({
-          role: "开仓",
+          role: "开空仓",
           side: "卖开",
+          direction: "开空仓",
           lots: 3,
           op: "小于等于",
           price: entry,
-          text: "最新价 ≤ " + entry.toFixed(0) + " → 开空 3 手",
+          text: "开空仓，开仓价格 " + entry.toFixed(0) + "（最新价 ≤ " + entry.toFixed(0) + " 卖开 3 手）",
         });
       }
       addTps(orders, "买平", "小于等于", false);

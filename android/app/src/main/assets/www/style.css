@@ -149,52 +149,22 @@ html, body {
 
 .orders { display: flex; flex-direction: column; gap: 8px; }
 
-.order-entry-hero {
-  padding: 14px;
-  border-radius: 12px;
+.order-row.entry-main {
   background: #e0f7fa;
-  border: 1px solid #80deea;
+  border-color: #80deea;
+  border-left-width: 5px;
 }
-.entry-hero-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-.entry-hero-tag {
-  font-size: 12px;
-  font-weight: 700;
+.order-row.entry-main .order-role {
   color: #006064;
-  background: #fff;
-  border-radius: 999px;
-  padding: 3px 10px;
-}
-.entry-hero-dir {
-  font-size: 18px;
-  font-weight: 800;
-  color: #006064;
-}
-.entry-hero-cond {
-  font-size: 15px;
-  font-weight: 650;
-  color: #134e4a;
-  margin-bottom: 6px;
-}
-.entry-hero-bottom {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-.entry-hero-price {
-  font-size: 32px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #102a43;
-  line-height: 1;
-}
-.entry-hero-lots {
   font-size: 13px;
-  color: #455a64;
+}
+.order-row.entry-main .order-cmp {
+  font-size: 14px;
+  color: #006064;
+}
+.order-row.entry-main .order-dir {
+  color: #006064;
+  font-size: 16px;
 }
 
 .order-row {

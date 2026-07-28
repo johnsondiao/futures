@@ -148,6 +148,23 @@ html, body {
 }
 
 .orders { display: flex; flex-direction: column; gap: 8px; }
+.order-row.entry-main {
+  background: #e0f7fa;
+  border-color: #80deea;
+  border-left-width: 5px;
+}
+.order-row.entry-main .order-role {
+  color: #006064;
+  font-size: 13px;
+}
+.order-row.entry-main .order-cmp {
+  font-size: 14px;
+  color: #006064;
+}
+.order-row.entry-main .order-dir {
+  color: #006064;
+  font-size: 16px;
+}
 .order-row {
   display: grid;
   grid-template-columns: 56px 1fr auto;

@@ -278,12 +278,13 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
         if entry is not None:
             orders.append(
                 {
-                    "role": "开仓",
+                    "role": "开多仓",
                     "side": "买开",
+                    "direction": "开多仓",
                     "lots": 3,
                     "op": "大于等于",
                     "price": entry,
-                    "text": f"最新价 ≥ {entry:.0f} → 开多 3 手",
+                    "text": f"开多仓，开仓价格 {entry:.0f}（最新价 ≥ {entry:.0f} 买开 3 手）",
                 }
             )
         _add_tps(orders, side="卖平", op="大于等于", ge=True)
@@ -306,12 +307,13 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
         if entry is not None:
             orders.append(
                 {
-                    "role": "开仓",
+                    "role": "开空仓",
                     "side": "卖开",
+                    "direction": "开空仓",
                     "lots": 3,
                     "op": "小于等于",
                     "price": entry,
-                    "text": f"最新价 ≤ {entry:.0f} → 开空 3 手",
+                    "text": f"开空仓，开仓价格 {entry:.0f}（最新价 ≤ {entry:.0f} 卖开 3 手）",
                 }
             )
         _add_tps(orders, side="买平", op="小于等于", ge=False)
