@@ -1,0 +1,49 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_url:
+        description: "App 默认服务地址（可在手机里再改）"
+        required: false
+        default: "http://10.0.2.2:8080"
+  push:
+    paths:
+      - "android/**"
+      - ".github/workflows/build-android.yml"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Create Gradle Wrapper
+        run: |
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
+
+      - name: Build Release APK
+        run: |
+          ./gradlew assembleRelease \
+            -PSERVER_URL="${{ github.event.inputs.server_url || 'http://10.0.2.2:8080' }}"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: channel-strategy-apk
+          path: android/app/build/outputs/apk/release/*.apk

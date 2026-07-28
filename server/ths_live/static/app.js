@@ -1,0 +1,622 @@
+(() => {
+  const el = {
+    meta: document.getElementById("meta"),
+    priceNow: document.getElementById("priceNow"),
+    liveDot: document.getElementById("liveDot"),
+    orderCard: document.getElementById("orderCard"),
+    needBadge: document.getElementById("needBadge"),
+    summary: document.getElementById("summary"),
+    orderList: document.getElementById("orderList"),
+    how: document.getElementById("how"),
+    analyticsCard: document.getElementById("analyticsCard"),
+    biasText: document.getElementById("biasText"),
+    analyticsBody: document.getElementById("analyticsBody"),
+    analyticsNote: document.getElementById("analyticsNote"),
+    priceChart: document.getElementById("priceChart"),
+    cciChart: document.getElementById("cciChart"),
+    cciPanel: document.getElementById("cciPanel"),
+    cciToggle: document.getElementById("cciToggle"),
+  };
+
+  let priceChart, candleSeries;
+  let upperEdge, lowerEdge;
+  let cciChart, cciSeries, cciMaSeries;
+  let channelData = [];
+  let levelTags = [];
+  let overlayCanvas = null;
+  let ready = false;
+  let pointer = { x: null, y: null, active: false };
+
+  const lightLayout = {
+    background: { color: "#ffffff" },
+    textColor: "#334155",
+  };
+  const lightGrid = {
+    vertLines: { color: "#eef2f6" },
+    horzLines: { color: "#eef2f6" },
+  };
+
+  function ensureOverlayCanvas() {
+    if (overlayCanvas) return overlayCanvas;
+    overlayCanvas = document.createElement("canvas");
+    overlayCanvas.style.cssText =
+      "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;";
+    el.priceChart.style.position = "relative";
+    el.priceChart.appendChild(overlayCanvas);
+    return overlayCanvas;
+  }
+
+  function drawChannelBand(ctx) {
+    if (!channelData.length) return;
+    const ts = priceChart.timeScale();
+    let seg = null;
+    const flush = () => {
+      if (!seg || seg.pts.length < 2) {
+        seg = null;
+        return;
+      }
+      ctx.beginPath();
+      for (let i = 0; i < seg.pts.length; i++) {
+        const p = seg.pts[i];
+        if (i === 0) ctx.moveTo(p.x, p.yu);
+        else ctx.lineTo(p.x, p.yu);
+      }
+      for (let i = seg.pts.length - 1; i >= 0; i--) {
+        const p = seg.pts[i];
+        ctx.lineTo(p.x, p.yl);
+      }
+      ctx.closePath();
+      ctx.fillStyle =
+        seg.color === 1 ? "rgba(211,47,47,0.16)" : "rgba(46,125,50,0.16)";
+      ctx.fill();
+      ctx.strokeStyle =
+        seg.color === 1 ? "rgba(211,47,47,0.55)" : "rgba(46,125,50,0.55)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (let i = 0; i < seg.pts.length; i++) {
+        const p = seg.pts[i];
+        if (i === 0) ctx.moveTo(p.x, p.yu);
+        else ctx.lineTo(p.x, p.yu);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      for (let i = 0; i < seg.pts.length; i++) {
+        const p = seg.pts[i];
+        if (i === 0) ctx.moveTo(p.x, p.yl);
+        else ctx.lineTo(p.x, p.yl);
+      }
+      ctx.stroke();
+      seg = null;
+    };
+
+    for (const row of channelData) {
+      if (row.upper == null || row.lower == null || !row.color) {
+        flush();
+        continue;
+      }
+      const x = ts.timeToCoordinate(row.time);
+      const yu = candleSeries.priceToCoordinate(row.upper);
+      const yl = candleSeries.priceToCoordinate(row.lower);
+      if (x == null || yu == null || yl == null) {
+        flush();
+        continue;
+      }
+      if (!seg || seg.color !== row.color) {
+        flush();
+        seg = { color: row.color, pts: [] };
+      }
+      seg.pts.push({ x, yu, yl });
+    }
+    flush();
+  }
+
+  function resolveLabelYs(items, minGap, chartH) {
+    items.sort((a, b) => a.trueY - b.trueY);
+    for (const it of items) it.labelY = it.trueY;
+
+    // 鼠标靠近时：整组标签文字躲开光标
+    if (pointer.active && pointer.y != null && pointer.x != null) {
+      const avoidR = 48;
+      for (const it of items) {
+        if (Math.abs(it.labelY - pointer.y) < avoidR) {
+          const dir = it.trueY >= pointer.y ? 1 : -1;
+          it.labelY = pointer.y + dir * avoidR;
+        }
+      }
+    }
+
+    // 标签之间防重叠
+    items.sort((a, b) => a.labelY - b.labelY);
+    for (let i = 1; i < items.length; i++) {
+      if (items[i].labelY - items[i - 1].labelY < minGap) {
+        items[i].labelY = items[i - 1].labelY + minGap;
+      }
+    }
+    // 再从下往上压一遍，避免挤出底部后仍重叠
+    for (let i = items.length - 2; i >= 0; i--) {
+      if (items[i + 1].labelY - items[i].labelY < minGap) {
+        items[i].labelY = items[i + 1].labelY - minGap;
+      }
+    }
+    // 夹在图内，并若光标仍压住则再推一次
+    for (const it of items) {
+      it.labelY = Math.max(12, Math.min(chartH - 12, it.labelY));
+      if (
+        pointer.active &&
+        pointer.y != null &&
+        Math.abs(it.labelY - pointer.y) < 32
+      ) {
+        const dir = it.labelY >= pointer.y ? 1 : -1;
+        it.labelY = Math.max(12, Math.min(chartH - 12, pointer.y + dir * 44));
+      }
+    }
+    items.sort((a, b) => a.labelY - b.labelY);
+    for (let i = 1; i < items.length; i++) {
+      if (items[i].labelY - items[i - 1].labelY < minGap) {
+        items[i].labelY = items[i - 1].labelY + minGap;
+      }
+    }
+  }
+
+  /** 右侧短截价位 + 可躲避光标的标签 */
+  function drawLevelTags(ctx, w, h) {
+    if (!levelTags.length) return;
+    const stub = 42;
+    const x2 = Math.max(stub + 8, w - 56);
+    const x1 = x2 - stub;
+    const items = [];
+    for (const tag of levelTags) {
+      if (tag.price == null || Number.isNaN(Number(tag.price))) continue;
+      const y = candleSeries.priceToCoordinate(Number(tag.price));
+      if (y == null) continue;
+      items.push({
+        ...tag,
+        trueY: Number(y),
+        labelY: Number(y),
+        price: Number(tag.price),
+      });
+    }
+    if (!items.length) return;
+    resolveLabelYs(items, 16, h);
+
+    ctx.font = "600 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+    for (const it of items) {
+      const label = `${it.title} ${it.price.toFixed(0)}`;
+      const tw = ctx.measureText(label).width;
+      const padX = 5;
+      const boxH = 17;
+      const boxW = tw + padX * 2;
+      let bx = Math.max(4, x1 - boxW - 6);
+      const by = it.labelY - boxH / 2;
+
+      // 光标压在标签矩形上时，整块文字再往左躲（短截线仍留在右侧）
+      if (
+        pointer.active &&
+        pointer.x != null &&
+        pointer.y != null &&
+        pointer.x >= bx - 8 &&
+        pointer.x <= x2 + 12 &&
+        pointer.y >= by - 10 &&
+        pointer.y <= by + boxH + 10
+      ) {
+        bx = Math.max(4, bx - 88);
+      }
+
+      // 真实价位短截线
+      ctx.strokeStyle = it.color;
+      ctx.lineWidth = it.width || 1.5;
+      ctx.setLineDash(it.dash || [4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x1, it.trueY);
+      ctx.lineTo(x2, it.trueY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = it.color;
+      ctx.beginPath();
+      ctx.arc(x2, it.trueY, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 标签偏离真实价时画指引线
+      if (Math.abs(it.labelY - it.trueY) > 1) {
+        ctx.strokeStyle = it.color;
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(x1, it.trueY);
+        ctx.lineTo(bx + boxW, it.labelY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.strokeStyle = it.color;
+      ctx.lineWidth = 1;
+      roundRect(ctx, bx, by, boxW, boxH, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = it.color;
+      ctx.fillText(label, bx + padX, it.labelY + 3.5);
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  function drawOverlays() {
+    if (!ready || !candleSeries) return;
+    const canvas = ensureOverlayCanvas();
+    const w = el.priceChart.clientWidth;
+    const h = el.priceChart.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.floor(w * dpr));
+    canvas.height = Math.max(1, Math.floor(h * dpr));
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    drawChannelBand(ctx);
+    drawLevelTags(ctx, w, h);
+  }
+
+  function onCrosshairMove(param) {
+    if (!param || param.point === undefined || param.point === null) {
+      pointer.active = false;
+      pointer.x = null;
+      pointer.y = null;
+    } else {
+      pointer.active = true;
+      pointer.x = param.point.x;
+      pointer.y = param.point.y;
+    }
+    drawOverlays();
+  }
+
+  function initCharts() {
+    priceChart = LightweightCharts.createChart(el.priceChart, {
+      layout: lightLayout,
+      grid: lightGrid,
+      rightPriceScale: { borderColor: "#dbe3ec" },
+      timeScale: { borderColor: "#dbe3ec", timeVisible: true, secondsVisible: false },
+      crosshair: { mode: 0 },
+    });
+
+    // 上下轨细线作边缘；色带由 canvas 填充
+    upperEdge = priceChart.addLineSeries({
+      color: "rgba(120,144,156,0.35)",
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    lowerEdge = priceChart.addLineSeries({
+      color: "rgba(120,144,156,0.35)",
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+
+    candleSeries = priceChart.addCandlestickSeries({
+      upColor: "#e53935",
+      downColor: "#43a047",
+      borderUpColor: "#c62828",
+      borderDownColor: "#2e7d32",
+      wickUpColor: "#c62828",
+      wickDownColor: "#2e7d32",
+    });
+
+    cciChart = LightweightCharts.createChart(el.cciChart, {
+      layout: lightLayout,
+      grid: lightGrid,
+      rightPriceScale: { borderColor: "#dbe3ec" },
+      timeScale: { borderColor: "#dbe3ec", visible: false },
+    });
+    cciSeries = cciChart.addLineSeries({
+      color: "#334155",
+      lineWidth: 2,
+      priceLineVisible: false,
+    });
+    cciMaSeries = cciChart.addLineSeries({
+      color: "#f9a825",
+      lineWidth: 1,
+      priceLineVisible: false,
+    });
+
+    const resize = () => {
+      priceChart.applyOptions({
+        width: el.priceChart.clientWidth,
+        height: el.priceChart.clientHeight,
+      });
+      cciChart.applyOptions({
+        width: el.cciChart.clientWidth,
+        height: el.cciChart.clientHeight,
+      });
+      drawOverlays();
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(el.priceChart);
+    ro.observe(el.cciChart);
+    priceChart.timeScale().subscribeVisibleLogicalRangeChange(drawOverlays);
+    priceChart.subscribeCrosshairMove(onCrosshairMove);
+
+    el.cciToggle.addEventListener("click", () => {
+      const open = el.cciPanel.classList.toggle("collapsed") === false;
+      el.cciToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      el.cciToggle.textContent = open ? "收起 CCI" : "CCI";
+      requestAnimationFrame(resize);
+    });
+
+    ready = true;
+  }
+
+  function toTime(s) {
+    const t = Date.parse(String(s).replace(" ", "T"));
+    return Math.floor(t / 1000);
+  }
+
+  function fullLine(times, values) {
+    const out = [];
+    for (let i = 0; i < times.length; i++) {
+      const v = values[i];
+      if (v == null || Number.isNaN(v)) continue;
+      out.push({ time: toTime(times[i]), value: v });
+    }
+    return out;
+  }
+
+  function setLevelTags(status) {
+    const tags = [];
+    if (!status) {
+      levelTags = tags;
+      return;
+    }
+    if (status.cond_entry != null) {
+      tags.push({ title: "开仓", price: status.cond_entry, color: "#00838f", width: 1.5 });
+    }
+    if (status.cond_tp1 != null) {
+      tags.push({ title: "止盈1", price: status.cond_tp1, color: "#ef5350", width: 1.2 });
+    }
+    if (status.cond_tp2 != null) {
+      tags.push({ title: "止盈2", price: status.cond_tp2, color: "#e53935", width: 1.5 });
+    }
+    if (status.cond_tp3 != null) {
+      tags.push({ title: "止盈3", price: status.cond_tp3, color: "#b71c1c", width: 1.5 });
+    }
+    if (status.cond_sl != null) {
+      tags.push({ title: "止损", price: status.cond_sl, color: "#7b1fa2", width: 1.5 });
+    }
+    levelTags = tags;
+  }
+
+  function buildMarkers(b) {
+    const markers = [];
+    const n = b.time.length;
+    for (let i = 0; i < n; i++) {
+      const t = toTime(b.time[i]);
+      if (b.open_long && b.open_long[i]) {
+        markers.push({
+          time: t,
+          position: "belowBar",
+          color: "#d32f2f",
+          shape: "arrowUp",
+          text: "开多",
+        });
+      }
+      if (b.open_short && b.open_short[i]) {
+        markers.push({
+          time: t,
+          position: "aboveBar",
+          color: "#2e7d32",
+          shape: "arrowDown",
+          text: "开空",
+        });
+      }
+      if (b.flat_long && b.flat_long[i]) {
+        markers.push({
+          time: t,
+          position: "aboveBar",
+          color: "#546e7a",
+          shape: "circle",
+          text: "平多",
+        });
+      }
+      if (b.flat_short && b.flat_short[i]) {
+        markers.push({
+          time: t,
+          position: "belowBar",
+          color: "#546e7a",
+          shape: "circle",
+          text: "平空",
+        });
+      }
+    }
+    markers.sort((a, b2) => a.time - b2.time);
+    return markers;
+  }
+
+  function roleClass(role) {
+    if (role && String(role).startsWith("止盈")) return "tp";
+    if (role === "止损") return "sl";
+    return "entry";
+  }
+
+  function renderOrder(status) {
+    const need = !!status.need_order;
+    el.orderCard.classList.toggle("yes", need);
+    el.orderCard.classList.toggle("no", !need);
+    el.orderCard.classList.remove("wait");
+    el.needBadge.textContent = need ? "需要设条件单" : "无需设条件单";
+    el.summary.textContent = status.summary || status.state || "";
+    el.how.textContent = status.how || "";
+
+    el.orderList.innerHTML = "";
+    const orders = status.orders || [];
+    if (!orders.length) {
+      const empty = document.createElement("div");
+      empty.className = "order-empty";
+      empty.textContent = "保持观望，先别挂单";
+      el.orderList.appendChild(empty);
+      return;
+    }
+    for (const o of orders) {
+      const div = document.createElement("div");
+      div.className = "order-row " + roleClass(o.role);
+      const distPts = o.distance_points != null ? `${o.distance_points}点` : "";
+      const distAtr = o.distance_atr != null ? ` · ${o.distance_atr}ATR` : "";
+      const cmp = o.op || o.cmp || (o.text || "").split(/\s+/)[0] || "";
+      div.innerHTML = `
+        <div class="order-role">${o.role || ""}</div>
+        <div class="order-mid">
+          <div class="order-cmp">${cmp} · ${o.side || ""}</div>
+          <div class="order-price">${o.price != null ? Number(o.price).toFixed(0) : "--"}</div>
+          <div class="order-dist">${distPts}${distAtr}</div>
+        </div>
+        <div class="order-side">
+          <div>${o.side || ""}</div>
+          <div class="order-lots">${o.lots != null ? o.lots + "手" : ""}</div>
+        </div>
+      `;
+      el.orderList.appendChild(div);
+    }
+  }
+
+  function pct(v) {
+    return v == null ? "--" : `${Number(v).toFixed(1)}%`;
+  }
+
+  function renderAnalytics(analytics) {
+    el.analyticsCard.classList.remove("bias-profit", "bias-loss");
+    if (!analytics || !analytics.available) {
+      el.biasText.textContent = (analytics && analytics.bias_text) || "暂无条件单，无评估";
+      el.analyticsBody.innerHTML = `<div class="order-empty">观望中，无需概率评估</div>`;
+      el.analyticsNote.textContent = (analytics && analytics.note) || "";
+      return;
+    }
+
+    const bias = analytics.bias || "none";
+    if (bias === "profit") el.analyticsCard.classList.add("bias-profit");
+    if (bias === "loss") el.analyticsCard.classList.add("bias-loss");
+    el.biasText.textContent = analytics.bias_text || "机会评估";
+
+    const fill = analytics.p_fill;
+    const tp = analytics.p_tp_first;
+    const sl = analytics.p_sl_first;
+    const exp = analytics.expected_points;
+    const expClass =
+      exp == null ? "neutral" : exp > 0.5 ? "profit" : exp < -0.5 ? "loss" : "neutral";
+    const expText =
+      exp == null ? "--" : (exp > 0 ? "+" : "") + Number(exp).toFixed(1);
+
+    el.analyticsBody.innerHTML = `
+      <div class="metrics">
+        <div class="metric">
+          <div class="label">开仓触发</div>
+          <div class="value">${pct(fill)}</div>
+          <div class="bar"><i style="width:${Math.min(100, fill || 0)}%"></i></div>
+        </div>
+        <div class="metric tp">
+          <div class="label">先止盈</div>
+          <div class="value">${pct(tp)}</div>
+          <div class="bar"><i style="width:${Math.min(100, tp || 0)}%"></i></div>
+        </div>
+        <div class="metric sl">
+          <div class="label">先止损</div>
+          <div class="value">${pct(sl)}</div>
+          <div class="bar"><i style="width:${Math.min(100, sl || 0)}%"></i></div>
+        </div>
+      </div>
+      <div class="expect-row ${expClass}">
+        <div class="label">期望点数 · n=${analytics.sample_n || 0}</div>
+        <div class="value">${expText}</div>
+      </div>
+    `;
+    el.analyticsNote.textContent = analytics.note || "基于本合约样本内统计，非未来保证";
+  }
+
+  function renderCharts(payload) {
+    if (!ready || !payload.bars) return;
+    const b = payload.bars;
+    const candles = [];
+    channelData = [];
+    for (let i = 0; i < b.time.length; i++) {
+      const t = toTime(b.time[i]);
+      candles.push({
+        time: t,
+        open: b.open[i],
+        high: b.high[i],
+        low: b.low[i],
+        close: b.close[i],
+      });
+      channelData.push({
+        time: t,
+        upper: b.upper[i],
+        lower: b.lower[i],
+        color: b.color[i],
+      });
+    }
+    candleSeries.setData(candles);
+    candleSeries.setMarkers(buildMarkers(b));
+    upperEdge.setData(fullLine(b.time, b.upper));
+    lowerEdge.setData(fullLine(b.time, b.lower));
+
+    setLevelTags(payload.status || {});
+
+    const cci = [];
+    const cciMa = [];
+    for (let i = 0; i < b.time.length; i++) {
+      const t = toTime(b.time[i]);
+      if (b.cci[i] != null) cci.push({ time: t, value: b.cci[i] });
+      if (b.cci_ma[i] != null) cciMa.push({ time: t, value: b.cci_ma[i] });
+    }
+    cciSeries.setData(cci);
+    cciMaSeries.setData(cciMa);
+    priceChart.timeScale().scrollToRealTime();
+    requestAnimationFrame(drawOverlays);
+  }
+
+  function applyPayload(payload) {
+    if (!payload || !payload.status) return;
+    const src = payload.source || "";
+    el.liveDot.className =
+      "dot " + (src === "live" ? "on" : src.startsWith("cache") ? "warn" : "off");
+    const close = payload.status.close;
+    el.priceNow.textContent = close != null ? Number(close).toFixed(0) : "—";
+    el.meta.textContent = `${payload.symbol || ""} · ${payload.period || ""} · ${src}`;
+    renderOrder(payload.status);
+    renderAnalytics(payload.analytics);
+    renderCharts(payload);
+  }
+
+  function connectWs() {
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    ws.onmessage = (ev) => {
+      try {
+        applyPayload(JSON.parse(ev.data));
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    ws.onclose = () => setTimeout(connectWs, 2000);
+    ws.onopen = () => {
+      setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) ws.send("ping");
+      }, 15000);
+    };
+  }
+
+  initCharts();
+  fetch("/api/snapshot")
+    .then((r) => r.json())
+    .then(applyPayload)
+    .catch(console.error);
+  connectWs();
+})();

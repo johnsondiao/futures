@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">通道策略</string>
+    <string name="server_hint">服务地址，如 http://192.168.1.8:8080</string>
+    <string name="connect">连接</string>
+    <string name="status_idle">等待连接实时服务</string>
+</resources>

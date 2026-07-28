@@ -15,5 +15,15 @@ tmp/
 .vscode/
 *.png
 *.html
+!server/**/*.html
 
 .evolver/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/**/captures/
+*.apk
+*.aab
+*.jks
+*.keystore

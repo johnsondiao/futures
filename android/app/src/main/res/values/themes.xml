@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ChannelStrategy" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#2EC4D6</item>
+        <item name="colorPrimaryVariant">#0F1419</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#0F1419</item>
+        <item name="android:navigationBarColor">#0F1419</item>
+        <item name="android:windowBackground">#0F1419</item>
+    </style>
+</resources>

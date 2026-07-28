@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#ffffff" />
+  <title>通道策略 · 条件单</title>
+  <link rel="stylesheet" href="/static/style.css?v=8" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-main">
+      <span class="brand">通道策略</span>
+      <span id="priceNow" class="price-now">—</span>
+      <span id="meta" class="meta">连接中…</span>
+    </div>
+    <div id="liveDot" class="dot off" title="数据源"></div>
+  </header>
+
+  <section class="chart-wrap">
+    <div class="chart-bar">
+      <span>5分钟 K线</span>
+      <button type="button" id="cciToggle" class="link-btn" aria-expanded="false">CCI</button>
+    </div>
+    <div id="priceChart" class="chart main"></div>
+    <div id="cciPanel" class="cci-panel collapsed">
+      <div id="cciChart" class="chart cci"></div>
+    </div>
+  </section>
+
+  <section id="orderCard" class="card order-card wait">
+    <div class="card-head">
+      <div id="needBadge" class="badge">—</div>
+      <p id="summary" class="summary">加载中…</p>
+    </div>
+    <div id="orderList" class="orders"></div>
+    <p id="how" class="hint"></p>
+  </section>
+
+  <section id="analyticsCard" class="card analytics-card">
+    <div class="card-head">
+      <div class="badge soft">机会评估</div>
+      <p id="biasText" class="summary">加载中…</p>
+    </div>
+    <div id="analyticsBody" class="analytics-body"></div>
+    <p id="analyticsNote" class="hint"></p>
+  </section>
+
+  <footer class="foot">收盘确认信号 · 条件价随最新K更新 · 强制刷新 Ctrl+F5</footer>
+  <script src="/static/app.js?v=10"></script>
+</body>
+</html>

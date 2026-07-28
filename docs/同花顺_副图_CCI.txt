@@ -1,25 +1,26 @@
-{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
-{ 名称：CCI确认开仓（副图）      }
-{ 周期：5分钟 | 用法：副图       }
-{ P=15 CCI周期  M=4 信号均线     }
-{ N通道=60 与主图通道一致        }
-{ 字幕与主图一致：开多/开空/平  }
-{ 三图同时出现「开/平」字再动手  }
-{━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
+{ 名称：CCI确认开仓（副图）                     }
+{ 周期：5分钟 | 用法：副图                      }
+{ P=15/M=4 与主图一致；只画CCI+少量近端字幕      }
+{━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━}
 
 P:=15;
 M:=4;
-N通道:=60;
+N:=60;
+ATRN:=14;
 
 TYP:=(HIGH+LOW+CLOSE)/3;
 CCI:(TYP-MA(TYP,P))/(0.015*AVEDEV(TYP,P)),COLORWHITE,LINETHICK2;
 CCI均:MA(CCI,M),COLORYELLOW,LINETHICK1;
 
+STICKLINE(CCI>=CCI均,CCI,CCI均,2,1),COLORLIRED;
+STICKLINE(CCI<CCI均,CCI,CCI均,2,1),COLORLIGREEN;
+
 金叉:=CROSS(CCI,CCI均);
 死叉:=CROSS(CCI均,CCI);
 
-上轨:=MA(HIGH,N通道);
-下轨:=MA(LOW,N通道);
+上轨:=MA(HIGH,N);
+下轨:=MA(LOW,N);
 侧:=IF(CLOSE>上轨,1,IF(CLOSE<下轨,-1,0));
 色值:=VALUEWHEN(侧<>0,侧);
 
@@ -28,18 +29,56 @@ CCI均:MA(CCI,M),COLORYELLOW,LINETHICK1;
 距变红:=BARSLAST(变红);
 距变绿:=BARSLAST(变绿);
 
-开多:=金叉 AND 色值=1 AND 距变红<距变绿;
-开空:=死叉 AND 色值=-1 AND 距变绿<距变红;
+候选多:=金叉 AND 色值=1 AND 距变红<距变绿;
+候选空:=死叉 AND 色值=-1 AND 距变绿<距变红;
+开多:=候选多 AND COUNT(候选多,距变红+1)=1;
+开空:=候选空 AND COUNT(候选空,距变绿+1)=1;
 
-{ 反向变色 = 剩余仓平仓提醒 }
-平多:=变绿;
-平空:=变红;
+距开多:=BARSLAST(开多);
+距开空:=BARSLAST(开空);
 
-DRAWICON(开多,CCI,1);
-DRAWICON(开空,CCI,2);
-DRAWTEXT(开多,CCI,'开多'),COLORRED;
-DRAWTEXT(开空,CCI,'开空'),COLORGREEN;
-DRAWTEXT(平多,CCI,'平多'),COLORGREEN;
-DRAWTEXT(平空,CCI,'平空'),COLORRED;
+TR1:=MAX(HIGH-LOW,MAX(ABS(HIGH-REF(CLOSE,1)),ABS(LOW-REF(CLOSE,1))));
+ATR:=MA(TR1,ATRN);
+入场价:=VALUEWHEN(开多 OR 开空,CLOSE);
+目标1多:=入场价+0.5*ATR;
+目标2多:=入场价+1*ATR;
+目标3多:=入场价+1.5*ATR;
+目标1空:=入场价-0.5*ATR;
+目标2空:=入场价-1*ATR;
+目标3空:=入场价-1.5*ATR;
 
-0,DOTLINE,COLORGRAY;
+达标1多:=EXIST(CLOSE>=目标1多,距开多+1);
+达标2多:=EXIST(CLOSE>=目标2多,距开多+1);
+达标3多:=EXIST(CLOSE>=目标3多,距开多+1);
+达标1空:=EXIST(CLOSE<=目标1空,距开空+1);
+达标2空:=EXIST(CLOSE<=目标2空,距开空+1);
+达标3空:=EXIST(CLOSE<=目标3空,距开空+1);
+
+反向平多:=变绿 AND 距开多<距开空;
+反向平空:=变红 AND 距开空<距开多;
+距反向平多:=BARSLAST(反向平多);
+距反向平空:=BARSLAST(反向平空);
+
+持多手数:=IF(距开多<距开空 AND 距开多<距反向平多,3-达标1多-达标2多-达标3多,0);
+持空手数:=IF(距开空<距开多 AND 距开空<距反向平空,3-达标1空-达标2空-达标3空,0);
+
+止盈1多:=达标1多 AND NOT(REF(达标1多,1)) AND 距开多<距开空 AND 距开多<距反向平多;
+止盈2多:=达标2多 AND NOT(REF(达标2多,1)) AND 距开多<距开空 AND 距开多<距反向平多;
+止盈3多:=达标3多 AND NOT(REF(达标3多,1)) AND 距开多<距开空 AND 距开多<距反向平多;
+止盈1空:=达标1空 AND NOT(REF(达标1空,1)) AND 距开空<距开多 AND 距开空<距反向平空;
+止盈2空:=达标2空 AND NOT(REF(达标2空,1)) AND 距开空<距开多 AND 距开空<距反向平空;
+止盈3空:=达标3空 AND NOT(REF(达标3空,1)) AND 距开空<距开多 AND 距开空<距反向平空;
+清仓多:=反向平多;
+清仓空:=反向平空;
+
+超买:100,DOTLINE,COLORGRAY;
+超卖:-100,DOTLINE,COLORGRAY;
+0轴:0,DOTLINE,COLORGRAY;
+
+近:=CURRBARSCOUNT<=80;
+DRAWTEXT(开多 AND 近,CCI-40,'开多'),COLORRED;
+DRAWTEXT(开空 AND 近,CCI+40,'开空'),COLORGREEN;
+DRAWTEXT(清仓多 AND 近,CCI+40,'清仓'),COLORGREEN;
+DRAWTEXT(清仓空 AND 近,CCI-40,'清仓'),COLORRED;
+DRAWICON(开多 AND 近,CCI,1);
+DRAWICON(开空 AND 近,CCI,2);
