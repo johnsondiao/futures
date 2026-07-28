@@ -148,6 +148,55 @@ html, body {
 }
 
 .orders { display: flex; flex-direction: column; gap: 8px; }
+
+.order-entry-hero {
+  padding: 14px;
+  border-radius: 12px;
+  background: #e0f7fa;
+  border: 1px solid #80deea;
+}
+.entry-hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.entry-hero-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: #006064;
+  background: #fff;
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.entry-hero-dir {
+  font-size: 18px;
+  font-weight: 800;
+  color: #006064;
+}
+.entry-hero-cond {
+  font-size: 15px;
+  font-weight: 650;
+  color: #134e4a;
+  margin-bottom: 6px;
+}
+.entry-hero-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.entry-hero-price {
+  font-size: 32px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #102a43;
+  line-height: 1;
+}
+.entry-hero-lots {
+  font-size: 13px;
+  color: #455a64;
+}
+
 .order-row {
   display: grid;
   grid-template-columns: 56px 1fr auto;
@@ -169,8 +218,9 @@ html, body {
 }
 .order-mid { min-width: 0; }
 .order-cmp {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  color: #334;
   margin-bottom: 2px;
 }
 .order-price {
@@ -185,10 +235,20 @@ html, body {
   font-size: 12px;
   color: var(--muted);
 }
+.order-dir {
+  font-size: 14px;
+  font-weight: 750;
+  color: #122;
+}
 .order-lots {
   font-size: 16px;
   font-weight: 700;
   color: #122;
+  margin-top: 2px;
+}
+.order-side-sub {
+  font-size: 11px;
+  color: var(--muted);
   margin-top: 2px;
 }
 .order-dist {
