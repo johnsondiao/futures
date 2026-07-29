@@ -107,11 +107,55 @@ html, body {
 .reset-btn.active {
   background: #006064;
 }
-.chart.main {
+.chart-main-row {
+  display: flex;
+  align-items: stretch;
   width: 100%;
   min-height: 42vh;
   height: 42vh;
   background: #fff;
+}
+.chart.main {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  height: 100%;
+  min-height: 0;
+  background: #fff;
+}
+.axis-label-rail {
+  position: relative;
+  width: 76px;
+  flex: 0 0 76px;
+  background: #fafbfc;
+  border-left: 1px solid var(--line);
+  overflow: hidden;
+  z-index: 2;
+}
+.axis-tag {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  box-sizing: border-box;
+  padding: 3px 4px 2px;
+  border-radius: 6px;
+  border: 1.5px solid #00838f;
+  background: rgba(255, 255, 255, 0.97);
+  text-align: center;
+  line-height: 1.15;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.axis-tag .t {
+  display: block;
+  font-size: 11px;
+  font-weight: 750;
+}
+.axis-tag .p {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 .cci-panel {
   border-top: 1px solid var(--line);
@@ -338,6 +382,6 @@ html, body {
 }
 
 @media (min-width: 720px) {
-  .chart.main { height: 48vh; min-height: 360px; }
+  .chart-main-row { height: 48vh; min-height: 360px; }
   body { max-width: 520px; margin: 0 auto; }
 }

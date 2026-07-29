@@ -13,6 +13,7 @@
     analyticsBody: document.getElementById("analyticsBody"),
     analyticsNote: document.getElementById("analyticsNote"),
     priceChart: document.getElementById("priceChart"),
+    axisLabelRail: document.getElementById("axisLabelRail"),
     cciChart: document.getElementById("cciChart"),
     cciPanel: document.getElementById("cciPanel"),
     cciToggle: document.getElementById("cciToggle"),
@@ -130,7 +131,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     drawChannelBand(ctx);
-    drawAxisLevelLabels(ctx, w, h);
+    renderAxisLabelRail(h);
   }
 
   function clearAxisPriceLines() {
@@ -142,7 +143,7 @@
     axisPriceLines = [];
   }
 
-  /** 条件价：淡线无图内标题；中文标签只画在右侧价轴区域 */
+  /** 淡横线无标题；中文标签放到图外右侧栏，绝不挡 K 线 */
   function setAxisLevelLabels(status) {
     clearAxisPriceLines();
     axisLevelTags = [];
@@ -160,18 +161,19 @@
       axisLevelTags.push({ title: lv.title, price, color: lv.color });
       const pl = candleSeries.createPriceLine({
         price,
-        color: hexToRgba(lv.color, 0.12),
+        color: hexToRgba(lv.color, 0.16),
         lineWidth: 1,
         lineStyle: 2,
         axisLabelVisible: false,
-        title: "",
       });
       axisPriceLines.push(pl);
     }
+    renderAxisLabelRail(el.priceChart ? el.priceChart.clientHeight : 0);
   }
 
   function resolveLabelYs(items, minGap, chartH) {
     items.sort((a, b) => a.trueY - b.trueY);
+    for (const it of items) it.labelY = it.trueY;
     for (let i = 1; i < items.length; i++) {
       if (items[i].labelY - items[i - 1].labelY < minGap) {
         items[i].labelY = items[i - 1].labelY + minGap;
@@ -179,34 +181,19 @@
     }
     for (let i = items.length - 2; i >= 0; i--) {
       if (items[i + 1].labelY - items[i].labelY < minGap) {
-        items[i].labelY = Math.max(12, items[i + 1].labelY - minGap);
+        items[i].labelY = Math.max(14, items[i + 1].labelY - minGap);
       }
     }
     for (const it of items) {
-      it.labelY = Math.max(12, Math.min(chartH - 12, it.labelY));
+      it.labelY = Math.max(14, Math.min(chartH - 14, it.labelY));
     }
   }
 
-  function roundRect(ctx, x, y, w, h, r) {
-    const rr = Math.min(r, w / 2, h / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + rr, y);
-    ctx.arcTo(x + w, y, x + w, y + h, rr);
-    ctx.arcTo(x + w, y + h, x, y + h, rr);
-    ctx.arcTo(x, y + h, x, y, rr);
-    ctx.arcTo(x, y, x + w, y, rr);
-    ctx.closePath();
-  }
-
-  /** 只在右侧价轴带内画「止盈/止损/开仓」文字，不挡 K 线 */
-  function drawAxisLevelLabels(ctx, w, h) {
-    if (!axisLevelTags.length || !candleSeries || !priceChart) return;
-    let scaleW = 84;
-    try {
-      const pw = priceChart.priceScale("right").width();
-      if (pw && pw > 40) scaleW = pw;
-    } catch (_) {}
-    const left = Math.max(0, w - scaleW);
+  function renderAxisLabelRail(chartH) {
+    const rail = el.axisLabelRail;
+    if (!rail) return;
+    rail.innerHTML = "";
+    if (!axisLevelTags.length || !candleSeries || !chartH) return;
     const items = [];
     for (const tag of axisLevelTags) {
       const y = candleSeries.priceToCoordinate(tag.price);
@@ -220,56 +207,20 @@
       });
     }
     if (!items.length) return;
-    resolveLabelYs(items, 18, h);
-
-    ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+    resolveLabelYs(items, 30, chartH);
     for (const it of items) {
-      const line1 = it.title;
-      const line2 = String(Math.round(it.price));
-      const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
-      const padX = 5;
-      const boxW = Math.min(scaleW - 6, tw + padX * 2);
-      const boxH = 28;
-      const bx = left + Math.max(3, (scaleW - boxW) / 2);
-      const by = it.labelY - boxH / 2;
-
-      // 价位指引：从主图右缘到标签
-      if (Math.abs(it.labelY - it.trueY) > 1) {
-        ctx.strokeStyle = it.color;
-        ctx.globalAlpha = 0.35;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 2]);
-        ctx.beginPath();
-        ctx.moveTo(left - 2, it.trueY);
-        ctx.lineTo(bx, it.labelY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-      } else {
-        ctx.strokeStyle = it.color;
-        ctx.globalAlpha = 0.5;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(left - 1, it.trueY);
-        ctx.lineTo(left + 3, it.trueY);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-
-      ctx.fillStyle = "rgba(255,255,255,0.96)";
-      ctx.strokeStyle = it.color;
-      ctx.lineWidth = 1.2;
-      roundRect(ctx, bx, by, boxW, boxH, 5);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = it.color;
-      ctx.textAlign = "center";
-      ctx.fillText(line1, bx + boxW / 2, by + 12);
-      ctx.font = "700 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
-      ctx.fillText(line2, bx + boxW / 2, by + 24);
-      ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
-      ctx.textAlign = "left";
+      const div = document.createElement("div");
+      div.className = "axis-tag";
+      div.style.borderColor = it.color;
+      div.style.color = it.color;
+      div.style.top = Math.round(it.labelY - 15) + "px";
+      div.innerHTML =
+        '<span class="t">' +
+        it.title +
+        '</span><span class="p">' +
+        Math.round(it.price) +
+        "</span>";
+      rail.appendChild(div);
     }
   }
 
@@ -289,7 +240,7 @@
       grid: lightGrid,
       rightPriceScale: {
         borderColor: "#dbe3ec",
-        minimumWidth: 88,
+        minimumWidth: 54,
         entireTextOnly: true,
       },
       timeScale: {
