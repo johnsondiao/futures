@@ -292,7 +292,27 @@
       layout: lightLayout,
       grid: lightGrid,
       rightPriceScale: { borderColor: "#dbe3ec" },
-      timeScale: { borderColor: "#dbe3ec", timeVisible: true, secondsVisible: false },
+      timeScale: {
+        borderColor: "#dbe3ec",
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 12,
+        fixRightEdge: false,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
       crosshair: { mode: 0 },
     });
 
@@ -323,7 +343,15 @@
       layout: lightLayout,
       grid: lightGrid,
       rightPriceScale: { borderColor: "#dbe3ec" },
-      timeScale: { borderColor: "#dbe3ec", visible: false },
+      timeScale: {
+        borderColor: "#dbe3ec",
+        visible: false,
+        rightOffset: 12,
+        fixRightEdge: false,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+      },
     });
     cciSeries = cciChart.addLineSeries({
       color: "#334155",
@@ -747,9 +775,9 @@
     const b = payload.bars;
     const candles = [];
     channelData = [];
-    const savedTimeRange =
+    const savedLogicalRange =
       !followRealtime && priceChart
-        ? priceChart.timeScale().getVisibleRange()
+        ? priceChart.timeScale().getVisibleLogicalRange()
         : null;
 
     for (let i = 0; i < b.time.length; i++) {
@@ -789,9 +817,13 @@
     try {
       if (followRealtime) {
         priceChart.timeScale().scrollToRealTime();
-      } else if (savedTimeRange && savedTimeRange.from != null && savedTimeRange.to != null) {
+      } else if (
+        savedLogicalRange &&
+        savedLogicalRange.from != null &&
+        savedLogicalRange.to != null
+      ) {
         try {
-          priceChart.timeScale().setVisibleRange(savedTimeRange);
+          priceChart.timeScale().setVisibleLogicalRange(savedLogicalRange);
         } catch (_) {}
       }
       const range = priceChart.timeScale().getVisibleLogicalRange();

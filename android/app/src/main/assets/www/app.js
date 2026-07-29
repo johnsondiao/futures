@@ -181,7 +181,28 @@
       layout: lightLayout,
       grid: lightGrid,
       rightPriceScale: { borderColor: "#dbe3ec" },
-      timeScale: { borderColor: "#dbe3ec", timeVisible: true, secondsVisible: false },
+      timeScale: {
+        borderColor: "#dbe3ec",
+        timeVisible: true,
+        secondsVisible: false,
+        // 允许把最后一根K线往左拖，右侧留白；默认也留一点边距
+        rightOffset: 12,
+        fixRightEdge: false,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+      },
+      handleScroll: {
+        mouseWheel: true,
+        pressedMouseMove: true,
+        horzTouchDrag: true,
+        vertTouchDrag: true,
+      },
+      handleScale: {
+        axisPressedMouseMove: true,
+        mouseWheel: true,
+        pinch: true,
+      },
       crosshair: { mode: 0 },
     });
 
@@ -212,7 +233,15 @@
       layout: lightLayout,
       grid: lightGrid,
       rightPriceScale: { borderColor: "#dbe3ec" },
-      timeScale: { borderColor: "#dbe3ec", visible: false },
+      timeScale: {
+        borderColor: "#dbe3ec",
+        visible: false,
+        rightOffset: 12,
+        fixRightEdge: false,
+        fixLeftEdge: false,
+        lockVisibleTimeRangeOnResize: true,
+        rightBarStaysOnScroll: false,
+      },
     });
     cciSeries = cciChart.addLineSeries({
       color: "#334155",
@@ -633,9 +662,9 @@
     const b = payload.bars;
     const candles = [];
     channelData = [];
-    const savedTimeRange =
+    const savedLogicalRange =
       !followRealtime && priceChart
-        ? priceChart.timeScale().getVisibleRange()
+        ? priceChart.timeScale().getVisibleLogicalRange()
         : null;
 
     for (let i = 0; i < b.time.length; i++) {
@@ -675,12 +704,15 @@
     try {
       if (followRealtime) {
         priceChart.timeScale().scrollToRealTime();
-      } else if (savedTimeRange && savedTimeRange.from != null && savedTimeRange.to != null) {
+      } else if (
+        savedLogicalRange &&
+        savedLogicalRange.from != null &&
+        savedLogicalRange.to != null
+      ) {
+        // 用逻辑区间，才能保留右侧空白（to 可以大于最后一根下标）
         try {
-          priceChart.timeScale().setVisibleRange(savedTimeRange);
-        } catch (_) {
-          // 区间已滚出数据窗口时保持当前逻辑范围即可
-        }
+          priceChart.timeScale().setVisibleLogicalRange(savedLogicalRange);
+        } catch (_) {}
       }
       const range = priceChart.timeScale().getVisibleLogicalRange();
       if (range) cciChart.timeScale().setVisibleLogicalRange(range);
