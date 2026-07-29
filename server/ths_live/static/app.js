@@ -26,6 +26,8 @@
   let overlayCanvas = null;
   let ready = false;
   let pointer = { x: null, y: null, active: false };
+  let seenOpenKeys = null;
+  let alertToastTimer = null;
 
   const lightLayout = {
     background: { color: "#ffffff" },
@@ -442,6 +444,89 @@
     return markers;
   }
 
+  function collectOpenKeys(b) {
+    const keys = [];
+    if (!b || !b.time) return keys;
+    for (let i = 0; i < b.time.length; i++) {
+      const t = String(b.time[i]);
+      if (b.open_long && b.open_long[i]) keys.push(t + "|L");
+      if (b.open_short && b.open_short[i]) keys.push(t + "|S");
+    }
+    return keys;
+  }
+
+  function playBeep(kind) {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = kind === "long" ? 880 : 660;
+      g.gain.value = 0.0001;
+      o.connect(g);
+      g.connect(ctx.destination);
+      const now = ctx.currentTime;
+      g.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+      o.start(now);
+      o.stop(now + 0.38);
+      setTimeout(() => ctx.close(), 500);
+    } catch (_) {}
+  }
+
+  function showAlertToast(kind, text) {
+    const box = document.getElementById("alertToast");
+    if (!box) return;
+    box.hidden = false;
+    box.className = "alert-toast " + (kind === "long" ? "long" : "short");
+    box.textContent = text;
+    if (alertToastTimer) clearTimeout(alertToastTimer);
+    alertToastTimer = setTimeout(() => {
+      box.hidden = true;
+    }, 4500);
+  }
+
+  function fireOpenAlert(kind, symbol, barTime) {
+    const label = kind === "long" ? "开多" : "开空";
+    const title = label + "信号";
+    const body = (symbol || "合约") + " K线出现「" + label + "」标记 · " + (barTime || "");
+    showAlertToast(kind, title + " · " + (symbol || ""));
+    playBeep(kind);
+    try {
+      if (typeof Notification !== "undefined") {
+        if (Notification.permission === "granted") {
+          new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
+        } else if (Notification.permission === "default") {
+          Notification.requestPermission().then((p) => {
+            if (p === "granted") {
+              new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
+            }
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  function maybeAlertOpens(payload) {
+    const b = payload && payload.bars;
+    if (!b) return;
+    const keys = collectOpenKeys(b);
+    if (seenOpenKeys === null) {
+      seenOpenKeys = new Set(keys);
+      return;
+    }
+    const symbol = payload.symbol || "";
+    for (const k of keys) {
+      if (seenOpenKeys.has(k)) continue;
+      seenOpenKeys.add(k);
+      const kind = k.endsWith("|L") ? "long" : "short";
+      const barTime = k.slice(0, -2);
+      fireOpenAlert(kind, symbol, barTime);
+    }
+  }
+
   function roleClass(role) {
     if (role && String(role).startsWith("止盈")) return "tp";
     if (role === "止损") return "sl";
@@ -624,6 +709,7 @@
     renderOrder(payload.status);
     renderAnalytics(payload.analytics);
     renderCharts(payload);
+    maybeAlertOpens(payload);
   }
 
   function connectWs() {

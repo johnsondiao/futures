@@ -299,6 +299,30 @@ html, body {
   padding: 6px 12px 28px;
 }
 
+.alert-toast {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  z-index: 50;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #102a43;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: 0 8px 24px rgba(16, 42, 67, 0.28);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.alert-toast.long { background: #c62828; }
+.alert-toast.short { background: #2e7d32; }
+.alert-toast[hidden] {
+  display: block;
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
 @media (min-width: 720px) {
   .chart.main { height: 48vh; min-height: 360px; }
   body { max-width: 520px; margin: 0 auto; }

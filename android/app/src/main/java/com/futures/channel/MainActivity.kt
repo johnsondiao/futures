@@ -1,6 +1,9 @@
 package com.futures.channel
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +18,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
@@ -37,10 +42,15 @@ class MainActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val auth = ShinnyAuth()
+    private val openNotifier by lazy { OpenSignalNotifier(this) }
     private var mdClient: DiffMdClient? = null
     private var pageReady = false
     private var pendingBars: JSONArray? = null
     private var lastPushMs = 0L
+
+    companion object {
+        private const val REQ_NOTIFY = 1001
+    }
 
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(this)
@@ -89,6 +99,8 @@ class MainActivity : AppCompatActivity() {
             reconnect()
             swipe.isRefreshing = false
         }
+
+        openNotifier.ensureChannel()
 
         btnLogin.setOnClickListener {
             val user = userInput.text.toString().trim()
@@ -143,6 +155,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun ensureNotifyPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        val granted = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQ_NOTIFY
+            )
+        }
+    }
+
     private fun showLogin() {
         loginRoot.visibility = View.VISIBLE
         boardRoot.visibility = View.GONE
@@ -152,6 +179,7 @@ class MainActivity : AppCompatActivity() {
     private fun showBoard() {
         loginRoot.visibility = View.GONE
         boardRoot.visibility = View.VISIBLE
+        ensureNotifyPermission()
         webView.loadUrl("file:///android_asset/www/index.html")
     }
 
@@ -210,6 +238,15 @@ class MainActivity : AppCompatActivity() {
             mainHandler.post {
                 pageReady = true
                 maybePushBars()
+            }
+        }
+
+        /** JS 检测到 K 线新出现「开多/开空」标记时调用。kind: long|short */
+        @JavascriptInterface
+        fun notifyOpenSignal(kind: String, title: String, body: String) {
+            mainHandler.post {
+                openNotifier.notifyOpen(kind, title, body)
+                Toast.makeText(this@MainActivity, title, Toast.LENGTH_LONG).show()
             }
         }
     }
