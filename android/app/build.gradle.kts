@@ -11,8 +11,8 @@ android {
         applicationId = "com.futures.channel"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10
-        versionName = "2.0.8"
+        versionCode = 11
+        versionName = "2.0.9"
     }
 
     // 个人分发：用 debug 密钥签 release，避免产出 unsigned APK 导致手机「解析软件包失败」

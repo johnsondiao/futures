@@ -164,87 +164,75 @@
     }
   }
 
-  /** 右侧短截价位 + 可躲避光标的标签 */
+  /** 只在右侧价轴带内画标签，不挡 K 线主图 */
   function drawLevelTags(ctx, w, h) {
-    if (!levelTags.length) return;
-    const stub = 42;
-    const x2 = Math.max(stub + 8, w - 56);
-    const x1 = x2 - stub;
+    if (!levelTags.length || !candleSeries || !priceChart) return;
+    let scaleW = 84;
+    try {
+      const pw = priceChart.priceScale("right").width();
+      if (pw && pw > 40) scaleW = pw;
+    } catch (_) {}
+    const left = Math.max(0, w - scaleW);
     const items = [];
     for (const tag of levelTags) {
       if (tag.price == null || Number.isNaN(Number(tag.price))) continue;
       const y = candleSeries.priceToCoordinate(Number(tag.price));
       if (y == null) continue;
       items.push({
-        ...tag,
+        title: tag.title,
+        price: Number(tag.price),
+        color: tag.color,
         trueY: Number(y),
         labelY: Number(y),
-        price: Number(tag.price),
       });
     }
     if (!items.length) return;
-    resolveLabelYs(items, 16, h);
+    resolveLabelYs(items, 18, h);
 
-    ctx.font = "600 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
     for (const it of items) {
-      const label = `${it.title} ${it.price.toFixed(0)}`;
-      const tw = ctx.measureText(label).width;
+      const line1 = it.title;
+      const line2 = String(Math.round(it.price));
+      const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
       const padX = 5;
-      const boxH = 17;
-      const boxW = tw + padX * 2;
-      let bx = Math.max(4, x1 - boxW - 6);
+      const boxW = Math.min(scaleW - 6, tw + padX * 2);
+      const boxH = 28;
+      const bx = left + Math.max(3, (scaleW - boxW) / 2);
       const by = it.labelY - boxH / 2;
 
-      // 光标压在标签矩形上时，整块文字再往左躲（短截线仍留在右侧）
-      if (
-        pointer.active &&
-        pointer.x != null &&
-        pointer.y != null &&
-        pointer.x >= bx - 8 &&
-        pointer.x <= x2 + 12 &&
-        pointer.y >= by - 10 &&
-        pointer.y <= by + boxH + 10
-      ) {
-        bx = Math.max(4, bx - 88);
-      }
-
-      // 真实价位短截线
-      ctx.strokeStyle = it.color;
-      ctx.lineWidth = it.width || 1.5;
-      ctx.setLineDash(it.dash || [4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(x1, it.trueY);
-      ctx.lineTo(x2, it.trueY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
+      // 主图内只留极短色点，不写字
       ctx.fillStyle = it.color;
       ctx.beginPath();
-      ctx.arc(x2, it.trueY, 2.5, 0, Math.PI * 2);
+      ctx.arc(left - 2, it.trueY, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // 标签偏离真实价时画指引线
       if (Math.abs(it.labelY - it.trueY) > 1) {
         ctx.strokeStyle = it.color;
-        ctx.globalAlpha = 0.45;
+        ctx.globalAlpha = 0.35;
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.moveTo(x1, it.trueY);
-        ctx.lineTo(bx + boxW, it.labelY);
+        ctx.moveTo(left - 2, it.trueY);
+        ctx.lineTo(bx, it.labelY);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
       }
 
-      ctx.fillStyle = "rgba(255,255,255,0.94)";
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
       ctx.strokeStyle = it.color;
-      ctx.lineWidth = 1;
-      roundRect(ctx, bx, by, boxW, boxH, 4);
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, bx, by, boxW, boxH, 5);
       ctx.fill();
       ctx.stroke();
+
       ctx.fillStyle = it.color;
-      ctx.fillText(label, bx + padX, it.labelY + 3.5);
+      ctx.textAlign = "center";
+      ctx.fillText(line1, bx + boxW / 2, by + 12);
+      ctx.font = "700 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+      ctx.fillText(line2, bx + boxW / 2, by + 24);
+      ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+      ctx.textAlign = "left";
     }
   }
 
@@ -291,7 +279,11 @@
     priceChart = LightweightCharts.createChart(el.priceChart, {
       layout: lightLayout,
       grid: lightGrid,
-      rightPriceScale: { borderColor: "#dbe3ec" },
+      rightPriceScale: {
+        borderColor: "#dbe3ec",
+        minimumWidth: 88,
+        entireTextOnly: true,
+      },
       timeScale: {
         borderColor: "#dbe3ec",
         timeVisible: true,

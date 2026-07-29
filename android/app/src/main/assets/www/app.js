@@ -24,6 +24,7 @@
   let cciChart, cciSeries, cciMaSeries;
   let channelData = [];
   let axisPriceLines = [];
+  let axisLevelTags = [];
   let overlayCanvas = null;
   let ready = false;
   /** null=未基线；之后只对新出现的开多/开空标记提醒 */
@@ -129,6 +130,7 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     drawChannelBand(ctx);
+    drawAxisLevelLabels(ctx, w, h);
   }
 
   function clearAxisPriceLines() {
@@ -140,9 +142,10 @@
     axisPriceLines = [];
   }
 
-  /** 条件价只显示在右侧价轴标签，不在 K 线区画文字/短线 */
+  /** 条件价：淡线无图内标题；中文标签只画在右侧价轴区域 */
   function setAxisLevelLabels(status) {
     clearAxisPriceLines();
+    axisLevelTags = [];
     if (!status || !candleSeries) return;
     const levels = [
       { title: "开仓", price: status.cond_entry, color: "#00838f" },
@@ -153,16 +156,120 @@
     ];
     for (const lv of levels) {
       if (lv.price == null || Number.isNaN(Number(lv.price))) continue;
+      const price = Number(lv.price);
+      axisLevelTags.push({ title: lv.title, price, color: lv.color });
       const pl = candleSeries.createPriceLine({
-        price: Number(lv.price),
-        // 几乎看不见的横线，文字只出现在右侧价轴
-        color: hexToRgba(lv.color, 0.08),
+        price,
+        color: hexToRgba(lv.color, 0.12),
         lineWidth: 1,
         lineStyle: 2,
-        axisLabelVisible: true,
-        title: lv.title,
+        axisLabelVisible: false,
+        title: "",
       });
       axisPriceLines.push(pl);
+    }
+  }
+
+  function resolveLabelYs(items, minGap, chartH) {
+    items.sort((a, b) => a.trueY - b.trueY);
+    for (let i = 1; i < items.length; i++) {
+      if (items[i].labelY - items[i - 1].labelY < minGap) {
+        items[i].labelY = items[i - 1].labelY + minGap;
+      }
+    }
+    for (let i = items.length - 2; i >= 0; i--) {
+      if (items[i + 1].labelY - items[i].labelY < minGap) {
+        items[i].labelY = Math.max(12, items[i + 1].labelY - minGap);
+      }
+    }
+    for (const it of items) {
+      it.labelY = Math.max(12, Math.min(chartH - 12, it.labelY));
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
+  }
+
+  /** 只在右侧价轴带内画「止盈/止损/开仓」文字，不挡 K 线 */
+  function drawAxisLevelLabels(ctx, w, h) {
+    if (!axisLevelTags.length || !candleSeries || !priceChart) return;
+    let scaleW = 84;
+    try {
+      const pw = priceChart.priceScale("right").width();
+      if (pw && pw > 40) scaleW = pw;
+    } catch (_) {}
+    const left = Math.max(0, w - scaleW);
+    const items = [];
+    for (const tag of axisLevelTags) {
+      const y = candleSeries.priceToCoordinate(tag.price);
+      if (y == null) continue;
+      items.push({
+        title: tag.title,
+        price: tag.price,
+        color: tag.color,
+        trueY: Number(y),
+        labelY: Number(y),
+      });
+    }
+    if (!items.length) return;
+    resolveLabelYs(items, 18, h);
+
+    ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+    for (const it of items) {
+      const line1 = it.title;
+      const line2 = String(Math.round(it.price));
+      const tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width);
+      const padX = 5;
+      const boxW = Math.min(scaleW - 6, tw + padX * 2);
+      const boxH = 28;
+      const bx = left + Math.max(3, (scaleW - boxW) / 2);
+      const by = it.labelY - boxH / 2;
+
+      // 价位指引：从主图右缘到标签
+      if (Math.abs(it.labelY - it.trueY) > 1) {
+        ctx.strokeStyle = it.color;
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(left - 2, it.trueY);
+        ctx.lineTo(bx, it.labelY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.strokeStyle = it.color;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(left - 1, it.trueY);
+        ctx.lineTo(left + 3, it.trueY);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+
+      ctx.fillStyle = "rgba(255,255,255,0.96)";
+      ctx.strokeStyle = it.color;
+      ctx.lineWidth = 1.2;
+      roundRect(ctx, bx, by, boxW, boxH, 5);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = it.color;
+      ctx.textAlign = "center";
+      ctx.fillText(line1, bx + boxW / 2, by + 12);
+      ctx.font = "700 12px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+      ctx.fillText(line2, bx + boxW / 2, by + 24);
+      ctx.font = "700 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+      ctx.textAlign = "left";
     }
   }
 
@@ -180,7 +287,11 @@
     priceChart = LightweightCharts.createChart(el.priceChart, {
       layout: lightLayout,
       grid: lightGrid,
-      rightPriceScale: { borderColor: "#dbe3ec" },
+      rightPriceScale: {
+        borderColor: "#dbe3ec",
+        minimumWidth: 88,
+        entireTextOnly: true,
+      },
       timeScale: {
         borderColor: "#dbe3ec",
         timeVisible: true,
