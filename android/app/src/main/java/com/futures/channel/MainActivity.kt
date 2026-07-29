@@ -249,6 +249,14 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this@MainActivity, title, Toast.LENGTH_LONG).show()
             }
         }
+
+        /** 手指在 K 线区域操作时关闭下拉刷新，避免和拖图抢手势 */
+        @JavascriptInterface
+        fun setSwipeEnabled(enabled: Boolean) {
+            mainHandler.post {
+                swipe.isEnabled = enabled
+            }
+        }
     }
 
     override fun onDestroy() {

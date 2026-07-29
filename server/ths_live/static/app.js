@@ -16,6 +16,7 @@
     cciChart: document.getElementById("cciChart"),
     cciPanel: document.getElementById("cciPanel"),
     cciToggle: document.getElementById("cciToggle"),
+    chartReset: document.getElementById("chartReset"),
   };
 
   let priceChart, candleSeries;
@@ -28,6 +29,9 @@
   let pointer = { x: null, y: null, active: false };
   let seenOpenKeys = null;
   let alertToastTimer = null;
+  let followRealtime = true;
+  let applyingChartRange = false;
+  let userGestureOnChart = false;
 
   const lightLayout = {
     background: { color: "#ffffff" },
@@ -346,8 +350,19 @@
     const ro = new ResizeObserver(resize);
     ro.observe(el.priceChart);
     ro.observe(el.cciChart);
-    priceChart.timeScale().subscribeVisibleLogicalRangeChange(drawOverlays);
+
+    const onRange = (range) => {
+      drawOverlays();
+      syncCciRange(range);
+      if (!applyingChartRange && userGestureOnChart) {
+        setFollowRealtime(false);
+      }
+    };
+    priceChart.timeScale().subscribeVisibleLogicalRangeChange(onRange);
     priceChart.subscribeCrosshairMove(onCrosshairMove);
+
+    bindChartGestures(el.priceChart);
+    bindChartGestures(el.cciChart);
 
     el.cciToggle.addEventListener("click", () => {
       const open = el.cciPanel.classList.toggle("collapsed") === false;
@@ -356,7 +371,77 @@
       requestAnimationFrame(resize);
     });
 
+    if (el.chartReset) {
+      el.chartReset.addEventListener("click", () => {
+        resetChartView();
+      });
+    }
+    updateResetBtn();
+
     ready = true;
+  }
+
+  function bindChartGestures(node) {
+    if (!node) return;
+    const down = () => {
+      userGestureOnChart = true;
+    };
+    const up = () => {
+      setTimeout(() => {
+        userGestureOnChart = false;
+      }, 80);
+    };
+    node.addEventListener("touchstart", down, { passive: true });
+    node.addEventListener("mousedown", down);
+    node.addEventListener("wheel", () => {
+      userGestureOnChart = true;
+      setFollowRealtime(false);
+    }, { passive: true });
+    node.addEventListener("touchend", up, { passive: true });
+    node.addEventListener("touchcancel", up, { passive: true });
+    node.addEventListener("mouseup", up);
+    node.addEventListener("mouseleave", up);
+  }
+
+  function syncCciRange(range) {
+    if (!cciChart || !range) return;
+    applyingChartRange = true;
+    try {
+      cciChart.timeScale().setVisibleLogicalRange(range);
+    } catch (_) {
+    } finally {
+      applyingChartRange = false;
+    }
+  }
+
+  function setFollowRealtime(on) {
+    followRealtime = !!on;
+    updateResetBtn();
+  }
+
+  function updateResetBtn() {
+    if (!el.chartReset) return;
+    el.chartReset.hidden = followRealtime;
+    el.chartReset.classList.toggle("active", !followRealtime);
+  }
+
+  function resetChartView() {
+    setFollowRealtime(true);
+    applyingChartRange = true;
+    try {
+      if (candleSeries) {
+        candleSeries.priceScale().applyOptions({ autoScale: true });
+      }
+      if (priceChart) {
+        priceChart.timeScale().scrollToRealTime();
+        const range = priceChart.timeScale().getVisibleLogicalRange();
+        syncCciRange(range);
+      }
+    } catch (_) {
+    } finally {
+      applyingChartRange = false;
+    }
+    requestAnimationFrame(drawOverlays);
   }
 
   function toTime(s) {
@@ -662,6 +747,11 @@
     const b = payload.bars;
     const candles = [];
     channelData = [];
+    const savedTimeRange =
+      !followRealtime && priceChart
+        ? priceChart.timeScale().getVisibleRange()
+        : null;
+
     for (let i = 0; i < b.time.length; i++) {
       const t = toTime(b.time[i]);
       candles.push({
@@ -694,7 +784,21 @@
     }
     cciSeries.setData(cci);
     cciMaSeries.setData(cciMa);
-    priceChart.timeScale().scrollToRealTime();
+
+    applyingChartRange = true;
+    try {
+      if (followRealtime) {
+        priceChart.timeScale().scrollToRealTime();
+      } else if (savedTimeRange && savedTimeRange.from != null && savedTimeRange.to != null) {
+        try {
+          priceChart.timeScale().setVisibleRange(savedTimeRange);
+        } catch (_) {}
+      }
+      const range = priceChart.timeScale().getVisibleLogicalRange();
+      if (range) cciChart.timeScale().setVisibleLogicalRange(range);
+    } finally {
+      applyingChartRange = false;
+    }
     requestAnimationFrame(drawOverlays);
   }
 

@@ -22,7 +22,10 @@
   <section class="chart-wrap">
     <div class="chart-bar">
       <span>5分钟 K线</span>
-      <button type="button" id="cciToggle" class="link-btn" aria-expanded="false">CCI</button>
+      <div class="chart-actions">
+        <button type="button" id="chartReset" class="link-btn reset-btn" hidden>复位</button>
+        <button type="button" id="cciToggle" class="link-btn" aria-expanded="false">CCI</button>
+      </div>
     </div>
     <div id="priceChart" class="chart main"></div>
     <div id="cciPanel" class="cci-panel collapsed">
