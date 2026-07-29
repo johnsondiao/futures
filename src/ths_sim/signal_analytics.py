@@ -127,7 +127,7 @@ def analyze_signal(ind: pd.DataFrame, horizon: int = 48) -> dict[str, Any]:
             # 当时近似：触发价用当时 cond_entry；若空则用 close
             e = ind["cond_entry"].iloc[i]
             e = float(e) if pd.notna(e) else c0
-            t = e + 0.5 * a0 if a0 == a0 else e * 1.001
+            t = e + 1.5 * a0 if a0 == a0 else e * 1.001
             s = float(lower[i]) if lower[i] == lower[i] else e * 0.99
             filled_at = None
             for j in range(i, min(i + horizon, n)):
@@ -141,7 +141,7 @@ def analyze_signal(ind: pd.DataFrame, horizon: int = 48) -> dict[str, Any]:
         elif kind == "wait_short":
             e = ind["cond_entry"].iloc[i]
             e = float(e) if pd.notna(e) else c0
-            t = e - 0.5 * a0 if a0 == a0 else e * 0.999
+            t = e - 1.5 * a0 if a0 == a0 else e * 0.999
             s = float(upper[i]) if upper[i] == upper[i] else e * 1.01
             filled_at = None
             for j in range(i, min(i + horizon, n)):
@@ -155,7 +155,7 @@ def analyze_signal(ind: pd.DataFrame, horizon: int = 48) -> dict[str, Any]:
         elif kind == "hold_long":
             fills += 1  # 已开仓
             e = float(ind["entry"].iloc[i]) if pd.notna(ind["entry"].iloc[i]) else c0
-            t = e + 0.5 * a0 if a0 == a0 else e * 1.001
+            t = e + 1.5 * a0 if a0 == a0 else e * 1.001
             s = float(lower[i]) if lower[i] == lower[i] else e * 0.99
             # 若已有下一止盈列更好，用当时 cond_tp
             if pd.notna(ind["cond_tp"].iloc[i]):
@@ -166,7 +166,7 @@ def analyze_signal(ind: pd.DataFrame, horizon: int = 48) -> dict[str, Any]:
         else:
             fills += 1
             e = float(ind["entry"].iloc[i]) if pd.notna(ind["entry"].iloc[i]) else c0
-            t = e - 0.5 * a0 if a0 == a0 else e * 0.999
+            t = e - 1.5 * a0 if a0 == a0 else e * 0.999
             s = float(upper[i]) if upper[i] == upper[i] else e * 1.01
             if pd.notna(ind["cond_tp"].iloc[i]):
                 t = float(ind["cond_tp"].iloc[i])

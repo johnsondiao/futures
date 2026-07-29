@@ -152,7 +152,7 @@
     const channelN = opts.channel_n || 60;
     const cciP = opts.cci_p || 15;
     const cciM = opts.cci_m || 4;
-    const atrN = opts.atr_n || 14;
+    const atrN = opts.atr_n || 20;
     const n = bars.length;
     const o = bars.map((b) => +b.open);
     const h = bars.map((b) => +b.high);
@@ -236,12 +236,12 @@
       openLong.map((v, i) => v || openShort[i]),
       c
     );
-    const t1l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 0.5 * atr[i] : nan()));
-    const t2l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 1.0 * atr[i] : nan()));
-    const t3l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 1.5 * atr[i] : nan()));
-    const t1s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 0.5 * atr[i] : nan()));
-    const t2s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 1.0 * atr[i] : nan()));
-    const t3s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 1.5 * atr[i] : nan()));
+    const t1l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 1.5 * atr[i] : nan()));
+    const t2l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 3.0 * atr[i] : nan()));
+    const t3l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 5.0 * atr[i] : nan()));
+    const t1s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 1.5 * atr[i] : nan()));
+    const t2s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 3.0 * atr[i] : nan()));
+    const t3s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 5.0 * atr[i] : nan()));
 
     const hit1l = existInWindow(
       c.map((cv, i) => isNum(t1l[i]) && cv >= t1l[i]),
@@ -316,9 +316,9 @@
         condEntry[i] = trigger[i];
         const sign = waitLong[i] ? 1 : -1;
         if (isNum(trigger[i]) && isNum(atr[i])) {
-          condTp1[i] = trigger[i] + sign * 0.5 * atr[i];
-          condTp2[i] = trigger[i] + sign * 1.0 * atr[i];
-          condTp3[i] = trigger[i] + sign * 1.5 * atr[i];
+          condTp1[i] = trigger[i] + sign * 1.5 * atr[i];
+          condTp2[i] = trigger[i] + sign * 3.0 * atr[i];
+          condTp3[i] = trigger[i] + sign * 5.0 * atr[i];
           condTp[i] = condTp1[i];
         }
       } else if (longLots[i] > 0) {
@@ -714,7 +714,7 @@
       if (kind === "wait_long") {
         let e = numOrNull(ind.cond_entry[idx]);
         if (e == null) e = c0;
-        const t = isNum(a0) ? e + 0.5 * a0 : e * 1.001;
+        const t = isNum(a0) ? e + 1.5 * a0 : e * 1.001;
         const slp = isNum(lower[idx]) ? lower[idx] : e * 0.99;
         let filledAt = null;
         for (let j = idx; j < Math.min(idx + horizon, n); j++) {
@@ -729,7 +729,7 @@
       } else if (kind === "wait_short") {
         let e = numOrNull(ind.cond_entry[idx]);
         if (e == null) e = c0;
-        const t = isNum(a0) ? e - 0.5 * a0 : e * 0.999;
+        const t = isNum(a0) ? e - 1.5 * a0 : e * 0.999;
         const slp = isNum(upper[idx]) ? upper[idx] : e * 1.01;
         let filledAt = null;
         for (let j = idx; j < Math.min(idx + horizon, n); j++) {
@@ -743,14 +743,14 @@
         hit = firstTpOrSlShort(high, low, color, filledAt, t, slp, horizon, n);
       } else if (kind === "hold_long") {
         fills += 1;
-        let t = isNum(a0) ? (isNum(ind.entry[idx]) ? ind.entry[idx] : c0) + 0.5 * a0 : c0 * 1.001;
+        let t = isNum(a0) ? (isNum(ind.entry[idx]) ? ind.entry[idx] : c0) + 1.5 * a0 : c0 * 1.001;
         let slp = isNum(lower[idx]) ? lower[idx] : c0 * 0.99;
         if (isNum(ind.cond_tp[idx])) t = ind.cond_tp[idx];
         if (isNum(ind.cond_sl[idx])) slp = ind.cond_sl[idx];
         hit = firstTpOrSlLong(high, low, color, idx, t, slp, horizon, n);
       } else {
         fills += 1;
-        let t = isNum(a0) ? (isNum(ind.entry[idx]) ? ind.entry[idx] : c0) - 0.5 * a0 : c0 * 0.999;
+        let t = isNum(a0) ? (isNum(ind.entry[idx]) ? ind.entry[idx] : c0) - 1.5 * a0 : c0 * 0.999;
         let slp = isNum(upper[idx]) ? upper[idx] : c0 * 1.01;
         if (isNum(ind.cond_tp[idx])) t = ind.cond_tp[idx];
         if (isNum(ind.cond_sl[idx])) slp = ind.cond_sl[idx];

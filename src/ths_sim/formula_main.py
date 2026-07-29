@@ -74,7 +74,7 @@ def compute_main_chart(
     channel_n: int = 60,
     cci_p: int = 15,
     cci_m: int = 4,
-    atr_n: int = 14,
+    atr_n: int = 20,
 ) -> pd.DataFrame:
     """输入 OHLCV DataFrame（index=datetime），输出指标全列。"""
     o = df["open"].astype(float)
@@ -116,12 +116,12 @@ def compute_main_chart(
     atr = _ma(tr, atr_n)
 
     entry = _value_when(open_long | open_short, c)
-    t1l = entry + 0.5 * atr
-    t2l = entry + 1.0 * atr
-    t3l = entry + 1.5 * atr
-    t1s = entry - 0.5 * atr
-    t2s = entry - 1.0 * atr
-    t3s = entry - 1.5 * atr
+    t1l = entry + 1.5 * atr
+    t2l = entry + 3.0 * atr
+    t3l = entry + 5.0 * atr
+    t1s = entry - 1.5 * atr
+    t2s = entry - 3.0 * atr
+    t3s = entry - 5.0 * atr
 
     hit1l = _exist_in_window(c >= t1l, bars_ol + 1)
     hit2l = _exist_in_window(c >= t2l, bars_ol + 1)
@@ -160,9 +160,9 @@ def compute_main_chart(
     trigger = (0.015 * avedev_prev * sig_prev * cci_p + sum_prev) / (cci_p - 1)
 
     # 等开仓：三档止盈相对触发价；持仓：相对开仓价
-    est_tp1 = np.where(wait_long, trigger + 0.5 * atr, trigger - 0.5 * atr)
-    est_tp2 = np.where(wait_long, trigger + 1.0 * atr, trigger - 1.0 * atr)
-    est_tp3 = np.where(wait_long, trigger + 1.5 * atr, trigger - 1.5 * atr)
+    est_tp1 = np.where(wait_long, trigger + 1.5 * atr, trigger - 1.5 * atr)
+    est_tp2 = np.where(wait_long, trigger + 3.0 * atr, trigger - 3.0 * atr)
+    est_tp3 = np.where(wait_long, trigger + 5.0 * atr, trigger - 5.0 * atr)
     est_tp1 = pd.Series(est_tp1, index=df.index)
     est_tp2 = pd.Series(est_tp2, index=df.index)
     est_tp3 = pd.Series(est_tp3, index=df.index)
@@ -254,7 +254,7 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
     sl = None if pd.isna(row["cond_sl"]) else float(row["cond_sl"])
 
     def _add_tps(orders: list[dict], *, side: str, op: str, ge: bool) -> None:
-        """三档止盈各 1 手（0.5 / 1.0 / 1.5 ATR）。"""
+        """三档止盈各 1 手（1.5 / 3 / 5 ATR）。"""
         sym = "≥" if ge else "≤"
         for i, price in enumerate((tp1, tp2, tp3), start=1):
             if price is None:

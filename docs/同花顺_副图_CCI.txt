@@ -7,7 +7,7 @@
 P:=15;
 M:=4;
 N:=60;
-ATRN:=14;
+ATRN:=20;
 
 TYP:=(HIGH+LOW+CLOSE)/3;
 CCI:(TYP-MA(TYP,P))/(0.015*AVEDEV(TYP,P)),COLORWHITE,LINETHICK2;
@@ -40,12 +40,12 @@ STICKLINE(CCI<CCI均,CCI,CCI均,2,1),COLORLIGREEN;
 TR1:=MAX(HIGH-LOW,MAX(ABS(HIGH-REF(CLOSE,1)),ABS(LOW-REF(CLOSE,1))));
 ATR:=MA(TR1,ATRN);
 入场价:=VALUEWHEN(开多 OR 开空,CLOSE);
-目标1多:=入场价+0.5*ATR;
-目标2多:=入场价+1*ATR;
-目标3多:=入场价+1.5*ATR;
-目标1空:=入场价-0.5*ATR;
-目标2空:=入场价-1*ATR;
-目标3空:=入场价-1.5*ATR;
+目标1多:=入场价+1.5*ATR;
+目标2多:=入场价+3*ATR;
+目标3多:=入场价+5*ATR;
+目标1空:=入场价-1.5*ATR;
+目标2空:=入场价-3*ATR;
+目标3空:=入场价-5*ATR;
 
 达标1多:=EXIST(CLOSE>=目标1多,距开多+1);
 达标2多:=EXIST(CLOSE>=目标2多,距开多+1);
