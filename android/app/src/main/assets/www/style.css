@@ -61,6 +61,174 @@ html, body {
   text-overflow: ellipsis;
   max-width: 42vw;
 }
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.icon-btn {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: #006064;
+  font-size: 12px;
+  font-weight: 650;
+  border-radius: 999px;
+  padding: 5px 10px;
+  line-height: 1;
+}
+.icon-btn:active { background: #e0f7fa; }
+
+body.panel-open {
+  overflow: hidden;
+}
+
+.page-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  animation: panelIn 0.18s ease;
+}
+.page-panel[hidden] { display: none !important; }
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.panel-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 750;
+}
+.panel-back {
+  border: 0;
+  background: transparent;
+  color: var(--entry);
+  font-size: 14px;
+  font-weight: 650;
+  padding: 4px 0;
+}
+.panel-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px 36px;
+  -webkit-overflow-scrolling: touch;
+}
+.panel-section-title {
+  margin: 4px 0 6px;
+  font-size: 15px;
+}
+.panel-desc, .panel-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.panel-note { margin-top: 14px; }
+.switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.switch-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.switch-row strong {
+  font-size: 14px;
+  font-weight: 650;
+}
+.switch-row small {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.switch-row input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #00838f;
+  flex-shrink: 0;
+}
+.primary-btn {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: #00838f;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+.primary-btn:active { background: #006064; }
+
+.guide-body { padding-bottom: 48px; }
+.guide-block {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.guide-block h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.guide-block p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #334;
+}
+.guide-params, .guide-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #334;
+}
+.guide-tip {
+  margin: 8px 0 0 !important;
+  padding: 8px 10px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  font-size: 12px !important;
+  color: #455a64 !important;
+}
+.c-red { color: #c62828; font-weight: 700; }
+.c-green { color: #2e7d32; font-weight: 700; }
+.diagram {
+  margin: 8px 0 4px;
+  background: #fafbfc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
 .dot {
   width: 9px; height: 9px; border-radius: 50%;
   background: #bbb;

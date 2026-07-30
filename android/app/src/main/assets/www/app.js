@@ -541,31 +541,51 @@
   }
 
   function fireOpenAlert(kind, symbol, barTime) {
+    const cfg =
+      (window.ChannelPages && window.ChannelPages.getAlertSettings
+        ? window.ChannelPages.getAlertSettings()
+        : null) || {
+        enabled: true,
+        sound: true,
+        vibrate: true,
+        notification: true,
+        toast: true,
+      };
+    if (!cfg.enabled) return;
+
     const label = kind === "long" ? "开多" : "开空";
     const title = label + "信号";
     const body = (symbol || "合约") + " K线出现「" + label + "」标记 · " + (barTime || "");
-    showAlertToast(kind, title + " · " + (symbol || ""));
+    if (cfg.toast) showAlertToast(kind, title + " · " + (symbol || ""));
+
     if (window.ChannelBridge && window.ChannelBridge.notifyOpenSignal) {
       try {
+        // 原生侧再按设置决定声音/震动/通知
         window.ChannelBridge.notifyOpenSignal(kind, title, body);
         return;
       } catch (_) {}
     }
-    playBeep(kind);
-    try {
-      if (typeof Notification !== "undefined") {
-        if (Notification.permission === "granted") {
-          new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
-        } else if (Notification.permission === "default") {
-          Notification.requestPermission().then((p) => {
-            if (p === "granted") {
-              new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
-            }
-          });
+    if (cfg.sound) playBeep(kind);
+    if (cfg.notification) {
+      try {
+        if (typeof Notification !== "undefined") {
+          if (Notification.permission === "granted") {
+            new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
+          } else if (Notification.permission === "default") {
+            Notification.requestPermission().then((p) => {
+              if (p === "granted") {
+                new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
+              }
+            });
+          }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
   }
+
+  window.__testOpenAlert = function () {
+    fireOpenAlert("long", "TEST", "试听");
+  };
 
   function maybeAlertOpens(payload) {
     const b = payload && payload.bars;

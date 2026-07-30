@@ -245,8 +245,51 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun notifyOpenSignal(kind: String, title: String, body: String) {
             mainHandler.post {
-                openNotifier.notifyOpen(kind, title, body)
-                Toast.makeText(this@MainActivity, title, Toast.LENGTH_LONG).show()
+                if (!prefs.getBoolean("alert_enabled", true)) return@post
+                val sound = prefs.getBoolean("alert_sound", true)
+                val vibrate = prefs.getBoolean("alert_vibrate", true)
+                val notification = prefs.getBoolean("alert_notification", true)
+                val toast = prefs.getBoolean("alert_toast", true)
+                openNotifier.notifyOpen(
+                    kind = kind,
+                    title = title,
+                    body = body,
+                    sound = sound,
+                    vibrate = vibrate,
+                    notification = notification,
+                )
+                if (toast) {
+                    Toast.makeText(this@MainActivity, title, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+
+        @JavascriptInterface
+        fun getAlertSettings(): String {
+            return JSONObject()
+                .put("enabled", prefs.getBoolean("alert_enabled", true))
+                .put("sound", prefs.getBoolean("alert_sound", true))
+                .put("vibrate", prefs.getBoolean("alert_vibrate", true))
+                .put("notification", prefs.getBoolean("alert_notification", true))
+                .put("toast", prefs.getBoolean("alert_toast", true))
+                .toString()
+        }
+
+        @JavascriptInterface
+        fun setAlertSettings(json: String) {
+            try {
+                val o = JSONObject(json)
+                prefs.edit()
+                    .putBoolean("alert_enabled", o.optBoolean("enabled", true))
+                    .putBoolean("alert_sound", o.optBoolean("sound", true))
+                    .putBoolean("alert_vibrate", o.optBoolean("vibrate", true))
+                    .putBoolean("alert_notification", o.optBoolean("notification", true))
+                    .putBoolean("alert_toast", o.optBoolean("toast", true))
+                    .apply()
+                if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
+                    mainHandler.post { ensureNotifyPermission() }
+                }
+            } catch (_: Exception) {
             }
         }
 
@@ -266,10 +309,21 @@ class MainActivity : AppCompatActivity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (this::webView.isInitialized && webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
+        if (this::webView.isInitialized) {
+            webView.evaluateJavascript(
+                "(function(){if(window.__closeTopPanel&&window.__closeTopPanel())return true;return false;})();"
+            ) { result ->
+                if (result == "true") return@evaluateJavascript
+                mainHandler.post {
+                    if (webView.canGoBack()) webView.goBack()
+                    else {
+                        @Suppress("DEPRECATION")
+                        super.onBackPressed()
+                    }
+                }
+            }
+            return
         }
+        super.onBackPressed()
     }
 }

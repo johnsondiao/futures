@@ -16,7 +16,11 @@
       <span id="priceNow" class="price-now">—</span>
       <span id="meta" class="meta">连接中…</span>
     </div>
-    <div id="liveDot" class="dot off" title="数据源"></div>
+    <div class="top-actions">
+      <button type="button" id="btnGuide" class="icon-btn" title="策略介绍">介绍</button>
+      <button type="button" id="btnSettings" class="icon-btn" title="设置">设置</button>
+      <div id="liveDot" class="dot off" title="数据源"></div>
+    </div>
   </header>
 
   <section class="chart-wrap">
@@ -54,10 +58,173 @@
     <p id="analyticsNote" class="hint"></p>
   </section>
 
-  <footer class="foot">v2.2.0 · 止盈 1.5/3/5×ATR(20) · 本机策略 · 下拉刷新重连</footer>
+  <footer class="foot">v2.3.0 · 止盈 1.5/3/5×ATR(20) · 本机策略 · 下拉刷新重连</footer>
   <div id="alertToast" class="alert-toast" hidden></div>
+
+  <!-- 设置 -->
+  <div id="panelSettings" class="page-panel" hidden>
+    <div class="panel-head">
+      <button type="button" class="panel-back" data-close="panelSettings">← 返回</button>
+      <h2>设置</h2>
+    </div>
+    <div class="panel-body">
+      <h3 class="panel-section-title">开仓信号提醒</h3>
+      <p class="panel-desc">当 K 线新出现「开多 / 开空」标记时提醒。首次加载历史信号不会打扰。</p>
+
+      <label class="switch-row">
+        <span>
+          <strong>启用提醒</strong>
+          <small>总开关；关闭后下列选项均不生效</small>
+        </span>
+        <input type="checkbox" id="setAlertEnabled" checked />
+      </label>
+      <label class="switch-row">
+        <span>
+          <strong>声音</strong>
+          <small>播放系统提示音</small>
+        </span>
+        <input type="checkbox" id="setAlertSound" checked />
+      </label>
+      <label class="switch-row">
+        <span>
+          <strong>震动</strong>
+          <small>短震动提示</small>
+        </span>
+        <input type="checkbox" id="setAlertVibrate" checked />
+      </label>
+      <label class="switch-row">
+        <span>
+          <strong>系统通知</strong>
+          <small>通知栏消息（Android 需授权）</small>
+        </span>
+        <input type="checkbox" id="setAlertNotification" checked />
+      </label>
+      <label class="switch-row">
+        <span>
+          <strong>应用内横幅</strong>
+          <small>盘面顶部彩色提示条 / Toast</small>
+        </span>
+        <input type="checkbox" id="setAlertToast" checked />
+      </label>
+
+      <button type="button" id="btnTestAlert" class="primary-btn">试听一次提醒</button>
+      <p class="panel-note">设置保存在本机。若收不到通知，请在系统设置中允许本应用通知权限。</p>
+    </div>
+  </div>
+
+  <!-- 策略介绍 -->
+  <div id="panelGuide" class="page-panel" hidden>
+    <div class="panel-head">
+      <button type="button" class="panel-back" data-close="panelGuide">← 返回</button>
+      <h2>策略介绍</h2>
+    </div>
+    <div class="panel-body guide-body">
+      <section class="guide-block">
+        <h3>这是什么策略？</h3>
+        <p>在 <strong>5 分钟</strong> K 线上，用「均线高低通道」判断多空方向，再用 <strong>CCI</strong> 交叉确认后开仓；持仓后按 <strong>ATR</strong> 分三档止盈，若趋势反向变色则平掉剩余仓。</p>
+        <ul class="guide-params">
+          <li>合约示例：豆一（App 默认 DCE.a2609）</li>
+          <li>开仓：固定 <strong>3 手</strong></li>
+          <li>通道 N=<strong>60</strong> · CCI(<strong>15</strong>)/均线(<strong>4</strong>)</li>
+          <li>止盈：<strong>1.5 / 3 / 5 × ATR(20)</strong>，各平 1 手</li>
+        </ul>
+      </section>
+
+      <section class="guide-block">
+        <h3>1. 通道颜色怎么定？</h3>
+        <p>上轨 = 最高价均线，下轨 = 最低价均线。收盘价在上轨之上→<span class="c-red">红色（偏多）</span>；在下轨之下→<span class="c-green">绿色（偏空）</span>；在通道内→颜色保持不变。</p>
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 320 150" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="28" width="280" height="36" fill="#fdecea" stroke="#e57373" stroke-width="1"/>
+            <text x="160" y="50" text-anchor="middle" font-size="12" fill="#c62828">收盘 &gt; 上轨 → 红色区（多）</text>
+            <rect x="20" y="64" width="280" height="28" fill="#fff" stroke="#90a4ae" stroke-dasharray="4 3"/>
+            <text x="160" y="82" text-anchor="middle" font-size="11" fill="#607d8b">通道内部 → 颜色保持</text>
+            <rect x="20" y="92" width="280" height="36" fill="#e8f5e9" stroke="#81c784" stroke-width="1"/>
+            <text x="160" y="114" text-anchor="middle" font-size="12" fill="#2e7d32">收盘 &lt; 下轨 → 绿色区（空）</text>
+            <text x="24" y="22" font-size="11" fill="#455a64">上轨 MA(High,60)</text>
+            <text x="24" y="142" font-size="11" fill="#455a64">下轨 MA(Low,60)</text>
+          </svg>
+        </div>
+        <p class="guide-tip"><strong>变色</strong>必须收盘从一侧穿到另一侧（红↔绿），通道内不算变色。</p>
+      </section>
+
+      <section class="guide-block">
+        <h3>2. 开仓：先变色，再等 CCI</h3>
+        <p>模式 <code>color_then_cci</code>：通道先变色，之后在同色期间出现 CCI 金叉/死叉，才开仓。</p>
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 320 168" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="#455a64"/>
+              </marker>
+            </defs>
+            <rect x="16" y="16" width="88" height="44" rx="8" fill="#e0f7fa" stroke="#00838f"/>
+            <text x="60" y="36" text-anchor="middle" font-size="11" fill="#006064">① 通道变红</text>
+            <text x="60" y="50" text-anchor="middle" font-size="10" fill="#455a64">偏多环境</text>
+            <line x1="104" y1="38" x2="128" y2="38" stroke="#455a64" stroke-width="2" marker-end="url(#arr)"/>
+            <rect x="128" y="16" width="88" height="44" rx="8" fill="#fff8e1" stroke="#f9a825"/>
+            <text x="172" y="36" text-anchor="middle" font-size="11" fill="#f57f17">② CCI 金叉</text>
+            <text x="172" y="50" text-anchor="middle" font-size="10" fill="#455a64">仍保持红色</text>
+            <line x1="216" y1="38" x2="240" y2="38" stroke="#455a64" stroke-width="2" marker-end="url(#arr)"/>
+            <rect x="240" y="16" width="64" height="44" rx="8" fill="#ffebee" stroke="#c62828"/>
+            <text x="272" y="42" text-anchor="middle" font-size="12" font-weight="700" fill="#c62828">开多3手</text>
+
+            <rect x="16" y="96" width="88" height="44" rx="8" fill="#e8f5e9" stroke="#2e7d32"/>
+            <text x="60" y="116" text-anchor="middle" font-size="11" fill="#1b5e20">① 通道变绿</text>
+            <text x="60" y="130" text-anchor="middle" font-size="10" fill="#455a64">偏空环境</text>
+            <line x1="104" y1="118" x2="128" y2="118" stroke="#455a64" stroke-width="2" marker-end="url(#arr)"/>
+            <rect x="128" y="96" width="88" height="44" rx="8" fill="#fff8e1" stroke="#f9a825"/>
+            <text x="172" y="116" text-anchor="middle" font-size="11" fill="#f57f17">② CCI 死叉</text>
+            <text x="172" y="130" text-anchor="middle" font-size="10" fill="#455a64">仍保持绿色</text>
+            <line x1="216" y1="118" x2="240" y2="118" stroke="#455a64" stroke-width="2" marker-end="url(#arr)"/>
+            <rect x="240" y="96" width="64" height="44" rx="8" fill="#e8f5e9" stroke="#2e7d32"/>
+            <text x="272" y="122" text-anchor="middle" font-size="12" font-weight="700" fill="#2e7d32">开空3手</text>
+          </svg>
+        </div>
+        <p class="guide-tip">判定用该 5 分钟 <strong>收盘价</strong>。变色后若还没等到 CCI 又反向变色，则取消原方向等待。</p>
+      </section>
+
+      <section class="guide-block">
+        <h3>3. 出场：ATR 三档 + 反向变色</h3>
+        <p>开仓后两套规则并行，谁先到谁执行。</p>
+        <div class="diagram" aria-hidden="true">
+          <svg viewBox="0 0 320 190" xmlns="http://www.w3.org/2000/svg">
+            <text x="24" y="22" font-size="12" font-weight="700" fill="#15202b">持多示例（开仓价 E）</text>
+            <line x1="40" y1="160" x2="300" y2="160" stroke="#90a4ae" stroke-width="1"/>
+            <text x="44" y="156" font-size="10" fill="#607d8b">E 开仓</text>
+            <line x1="40" y1="120" x2="300" y2="120" stroke="#ef5350" stroke-dasharray="5 3"/>
+            <text x="44" y="116" font-size="10" fill="#c62828">止盈1 · E+1.5ATR · 平1手</text>
+            <line x1="40" y1="80" x2="300" y2="80" stroke="#e53935" stroke-dasharray="5 3"/>
+            <text x="44" y="76" font-size="10" fill="#b71c1c">止盈2 · E+3ATR · 平1手</text>
+            <line x1="40" y1="40" x2="300" y2="40" stroke="#b71c1c" stroke-dasharray="5 3"/>
+            <text x="44" y="36" font-size="10" fill="#7f0000">止盈3 · E+5ATR · 平1手</text>
+            <circle cx="70" cy="160" r="4" fill="#00838f"/>
+            <path d="M200 150 Q220 100 250 50" fill="none" stroke="#c62828" stroke-width="2"/>
+            <circle cx="250" cy="50" r="4" fill="#c62828"/>
+            <text x="258" y="54" font-size="10" fill="#455a64">价格上行</text>
+            <rect x="16" y="168" width="288" height="18" rx="4" fill="#f3e5f5"/>
+            <text x="160" y="181" text-anchor="middle" font-size="10" fill="#6a1b9a">若未止盈完且通道变绿 → 剩余仓全部平掉</text>
+          </svg>
+        </div>
+        <p class="guide-tip">空单对称：目标在开仓价下方；反向清仓条件为通道变红。</p>
+      </section>
+
+      <section class="guide-block">
+        <h3>4. App 怎么用？</h3>
+        <ol class="guide-steps">
+          <li>看 K 线旁的「开多 / 开空」标记与条件单卡片价格。</li>
+          <li>在期货软件按卡片设置条件单（开仓 / 三档止盈 / 止损）。</li>
+          <li>右侧栏显示开仓、止盈、止损价位，不挡主图。</li>
+          <li>可在「设置」打开开仓信号声音与通知提醒。</li>
+        </ol>
+        <p class="guide-tip">本 App 只做盘面辅助与提醒，<strong>不会自动下单</strong>。回测表现不保证实盘收益。</p>
+      </section>
+    </div>
+  </div>
+
   <script>window.CHANNEL_DEVICE = true;</script>
   <script src="strategy.js"></script>
+  <script src="pages.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

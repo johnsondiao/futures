@@ -47,10 +47,18 @@ class OpenSignalNotifier(private val context: Context) {
         mgr.createNotificationChannel(channel)
     }
 
-    fun notifyOpen(kind: String, title: String, body: String) {
+  fun notifyOpen(
+        kind: String,
+        title: String,
+        body: String,
+        sound: Boolean = true,
+        vibrate: Boolean = true,
+        notification: Boolean = true,
+    ) {
         ensureChannel()
-        playSound()
-        vibrate()
+        if (sound) playSound()
+        if (vibrate) vibrate()
+        if (!notification) return
 
         val launch = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -71,13 +79,13 @@ class OpenSignalNotifier(private val context: Context) {
             .setContentIntent(pi)
             .setColor(color)
             .setOnlyAlertOnce(true)
+            .setSilent(!sound)
 
         notifySeq = (notifySeq + 1) % 1000
         try {
             NotificationManagerCompat.from(context)
                 .notify(NOTIFY_ID_BASE + notifySeq, builder.build())
         } catch (_: SecurityException) {
-            // 未授权通知时仍已播声音/震动
         }
     }
 
