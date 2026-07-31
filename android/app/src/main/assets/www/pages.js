@@ -142,6 +142,22 @@
     if (testBtn) {
       testBtn.addEventListener("click", () => {
         readSettingsFromUi();
+        // 原生试听更可靠（ToneGenerator + 震动 + 系统通知）
+        if (window.ChannelBridge && window.ChannelBridge.testOpenAlert) {
+          try {
+            window.ChannelBridge.testOpenAlert();
+            const box = document.getElementById("alertToast");
+            if (box) {
+              box.hidden = false;
+              box.className = "alert-toast long";
+              box.textContent = "开多信号（试听）";
+              setTimeout(() => {
+                box.hidden = true;
+              }, 4500);
+            }
+            return;
+          } catch (_) {}
+        }
         if (window.__testOpenAlert) window.__testOpenAlert();
       });
     }

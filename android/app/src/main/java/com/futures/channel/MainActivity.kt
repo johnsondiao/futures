@@ -250,7 +250,7 @@ class MainActivity : AppCompatActivity() {
                 val vibrate = prefs.getBoolean("alert_vibrate", true)
                 val notification = prefs.getBoolean("alert_notification", true)
                 val toast = prefs.getBoolean("alert_toast", true)
-                openNotifier.notifyOpen(
+                val posted = openNotifier.notifyOpen(
                     kind = kind,
                     title = title,
                     body = body,
@@ -258,9 +258,51 @@ class MainActivity : AppCompatActivity() {
                     vibrate = vibrate,
                     notification = notification,
                 )
-                if (toast) {
+                if (notification && !posted) {
+                    ensureNotifyPermission()
+                    Toast.makeText(
+                        this@MainActivity,
+                        "请允许「通知」权限，否则看不到系统通知栏提醒",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else if (toast) {
                     Toast.makeText(this@MainActivity, title, Toast.LENGTH_LONG).show()
                 }
+            }
+        }
+
+        /** 设置页「试听」：强制走一遍声音/震动/通知，并回报结果 */
+        @JavascriptInterface
+        fun testOpenAlert() {
+            mainHandler.post {
+                if (!prefs.getBoolean("alert_enabled", true)) {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "总开关已关闭：请先打开「启用提醒」",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@post
+                }
+                ensureNotifyPermission()
+                val notification = prefs.getBoolean("alert_notification", true)
+                // 试听固定打开声音+震动，方便确认通道是否通
+                val posted = openNotifier.notifyOpen(
+                    kind = "long",
+                    title = "开多信号（试听）",
+                    body = "若听到提示音/震动，说明提醒通道正常",
+                    sound = true,
+                    vibrate = true,
+                    notification = notification,
+                )
+                val msg = when {
+                    notification && !posted ->
+                        "已震动/响铃，但系统通知被拒：请到手机设置里允许本应用通知"
+                    notification ->
+                        "试听已发送：提示音 + 震动 + 通知栏"
+                    else ->
+                        "试听已发送：提示音 + 震动（未开系统通知）"
+                }
+                Toast.makeText(this@MainActivity, msg, Toast.LENGTH_LONG).show()
             }
         }
 

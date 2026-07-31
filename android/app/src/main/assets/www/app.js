@@ -562,6 +562,8 @@
       try {
         // 原生侧再按设置决定声音/震动/通知
         window.ChannelBridge.notifyOpenSignal(kind, title, body);
+        // WebView 内再补一声，避免个别机型原生 Ringtone 被静音
+        if (cfg.sound) playBeep(kind);
         return;
       } catch (_) {}
     }

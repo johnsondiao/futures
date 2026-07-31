@@ -552,7 +552,7 @@ body.panel-open {
   left: 12px;
   right: 12px;
   top: calc(12px + env(safe-area-inset-top, 0px));
-  z-index: 50;
+  z-index: 80;
   padding: 12px 14px;
   border-radius: 12px;
   background: #102a43;
