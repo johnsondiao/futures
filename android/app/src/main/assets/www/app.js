@@ -651,16 +651,23 @@
 
       if (isEntryOrder(o)) {
         const title = entryTitle(o);
-        div.className += " entry-main";
+        const crossed = !!o.crossed;
+        const priceLabel = o.label || "触发价";
+        div.className += " entry-main" + (crossed ? " entry-crossed" : "");
+        const hint = crossed
+          ? "现价已越过 · 按现价开仓"
+          : o.op && o.op.indexOf("大于") >= 0
+            ? "等涨到此价再开"
+            : "等跌到此价再开";
         div.innerHTML = `
           <div class="order-role">${title}</div>
           <div class="order-mid">
-            <div class="order-cmp">开仓价格</div>
+            <div class="order-cmp">${priceLabel}${crossed ? " · 已越过" : ""}</div>
             <div class="order-price">${price}</div>
-            <div class="order-dist">${o.op || ""} · ${o.lots != null ? o.lots + "手" : ""}${distPts ? " · " + distPts : ""}${distAtr}</div>
+            <div class="order-dist">${hint}${distPts ? " · " + distPts : ""}${distAtr}</div>
           </div>
           <div class="order-side">
-            <div class="order-dir">${title}</div>
+            <div class="order-dir">${crossed ? "现价开" : title}</div>
             <div class="order-lots">${o.lots != null ? o.lots + "手" : ""}</div>
           </div>
         `;

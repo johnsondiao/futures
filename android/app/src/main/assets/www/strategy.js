@@ -462,7 +462,10 @@
     if (ind.wait_long[i]) {
       state = "等开多";
       need_order = true;
-      summary = "需要设条件单：开多 3 手";
+      const crossed = entry != null && close >= entry;
+      summary = crossed
+        ? "触发价已越过（现价" + close.toFixed(0) + " ≥ " + entry.toFixed(0) + "），可按现价开多 3 手"
+        : "需要设条件单：等涨到触发价再开多 3 手";
       if (entry != null) {
         orders.push({
           role: "开多仓",
@@ -471,7 +474,11 @@
           lots: 3,
           op: "大于等于",
           price: entry,
-          text: "开多仓，开仓价格 " + entry.toFixed(0) + "（最新价 ≥ " + entry.toFixed(0) + " 买开 3 手）",
+          label: "触发价",
+          crossed: crossed,
+          text: crossed
+            ? "触发价 " + entry.toFixed(0) + "：现价已 ≥ 触发价，条件已满足，按现价/市价开多即可"
+            : "触发价 " + entry.toFixed(0) + "：最新价涨到 ≥ " + entry.toFixed(0) + " 再买开 3 手（不是挂更低价）",
         });
       }
       addTps(orders, "卖平", "大于等于", true);
@@ -485,11 +492,16 @@
           text: "最新价 ≤ " + sl.toFixed(0) + " → 剩余全平（止损/反向）",
         });
       }
-      how = "开仓/止盈用「大于等于」，止损用「小于等于」；止盈分三档各 1 手";
+      how = crossed
+        ? "触发价=CCI金叉近似价；现价已越过则别等更低价。开仓/止盈「大于等于」，止损「小于等于」"
+        : "触发价=CCI金叉近似价；挂「最新价≥触发价」开多。止盈「大于等于」，止损「小于等于」";
     } else if (ind.wait_short[i]) {
       state = "等开空";
       need_order = true;
-      summary = "需要设条件单：开空 3 手";
+      const crossed = entry != null && close <= entry;
+      summary = crossed
+        ? "触发价已越过（现价" + close.toFixed(0) + " ≤ " + entry.toFixed(0) + "），可按现价开空 3 手"
+        : "需要设条件单：等跌到触发价再开空 3 手";
       if (entry != null) {
         orders.push({
           role: "开空仓",
@@ -498,7 +510,11 @@
           lots: 3,
           op: "小于等于",
           price: entry,
-          text: "开空仓，开仓价格 " + entry.toFixed(0) + "（最新价 ≤ " + entry.toFixed(0) + " 卖开 3 手）",
+          label: "触发价",
+          crossed: crossed,
+          text: crossed
+            ? "触发价 " + entry.toFixed(0) + "：现价已 ≤ 触发价，条件已满足，按现价/市价开空即可"
+            : "触发价 " + entry.toFixed(0) + "：最新价跌到 ≤ " + entry.toFixed(0) + " 再卖开 3 手（不是挂更高价）",
         });
       }
       addTps(orders, "买平", "小于等于", false);
@@ -512,7 +528,9 @@
           text: "最新价 ≥ " + sl.toFixed(0) + " → 剩余全平（止损/反向）",
         });
       }
-      how = "开仓/止盈用「小于等于」，止损用「大于等于」；止盈分三档各 1 手";
+      how = crossed
+        ? "触发价=CCI死叉近似价；现价已越过则别等更高价。开仓/止盈「小于等于」，止损「大于等于」"
+        : "触发价=CCI死叉近似价；挂「最新价≤触发价」开空。止盈「小于等于」，止损「大于等于」";
     } else if (ind.long_lots[i] > 0) {
       state = "持多" + Math.floor(ind.long_lots[i]) + "手";
       need_order = true;

@@ -392,6 +392,15 @@ body.panel-open {
   color: #006064;
   font-size: 16px;
 }
+.order-row.entry-crossed {
+  background: #fff8e1;
+  border-color: #ffcc80;
+}
+.order-row.entry-crossed .order-role,
+.order-row.entry-crossed .order-cmp,
+.order-row.entry-crossed .order-dir {
+  color: #e65100;
+}
 
 .order-row {
   display: grid;

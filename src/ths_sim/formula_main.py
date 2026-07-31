@@ -271,10 +271,15 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
             )
 
     orders: list[dict] = []
+    close = float(row["close"])
     if bool(row["wait_long"]):
         state = "等开多"
         need_order = True
-        summary = "需要设条件单：开多 3 手"
+        crossed = entry is not None and close >= entry
+        if crossed:
+            summary = f"触发价已越过（现价{close:.0f} ≥ {entry:.0f}），可按现价开多 3 手"
+        else:
+            summary = "需要设条件单：等涨到触发价再开多 3 手"
         if entry is not None:
             orders.append(
                 {
@@ -284,7 +289,13 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
                     "lots": 3,
                     "op": "大于等于",
                     "price": entry,
-                    "text": f"开多仓，开仓价格 {entry:.0f}（最新价 ≥ {entry:.0f} 买开 3 手）",
+                    "label": "触发价",
+                    "crossed": crossed,
+                    "text": (
+                        f"触发价 {entry:.0f}：现价已 ≥ 触发价，条件已满足，按现价/市价开多即可"
+                        if crossed
+                        else f"触发价 {entry:.0f}：最新价涨到 ≥ {entry:.0f} 再买开 3 手（不是挂更低价）"
+                    ),
                 }
             )
         _add_tps(orders, side="卖平", op="大于等于", ge=True)
@@ -299,11 +310,19 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
                     "text": f"最新价 ≤ {sl:.0f} → 剩余全平（止损/反向）",
                 }
             )
-        how = "开仓/止盈用「大于等于」，止损用「小于等于」；止盈分三档各 1 手"
+        how = (
+            "触发价=CCI金叉近似价；现价已越过则别等更低价。开仓/止盈「大于等于」，止损「小于等于」"
+            if crossed
+            else "触发价=CCI金叉近似价；挂「最新价≥触发价」开多。止盈「大于等于」，止损「小于等于」"
+        )
     elif bool(row["wait_short"]):
         state = "等开空"
         need_order = True
-        summary = "需要设条件单：开空 3 手"
+        crossed = entry is not None and close <= entry
+        if crossed:
+            summary = f"触发价已越过（现价{close:.0f} ≤ {entry:.0f}），可按现价开空 3 手"
+        else:
+            summary = "需要设条件单：等跌到触发价再开空 3 手"
         if entry is not None:
             orders.append(
                 {
@@ -313,7 +332,13 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
                     "lots": 3,
                     "op": "小于等于",
                     "price": entry,
-                    "text": f"开空仓，开仓价格 {entry:.0f}（最新价 ≤ {entry:.0f} 卖开 3 手）",
+                    "label": "触发价",
+                    "crossed": crossed,
+                    "text": (
+                        f"触发价 {entry:.0f}：现价已 ≤ 触发价，条件已满足，按现价/市价开空即可"
+                        if crossed
+                        else f"触发价 {entry:.0f}：最新价跌到 ≤ {entry:.0f} 再卖开 3 手（不是挂更高价）"
+                    ),
                 }
             )
         _add_tps(orders, side="买平", op="小于等于", ge=False)
@@ -328,7 +353,11 @@ def last_bar_status(ind: pd.DataFrame) -> dict:
                     "text": f"最新价 ≥ {sl:.0f} → 剩余全平（止损/反向）",
                 }
             )
-        how = "开仓/止盈用「小于等于」，止损用「大于等于」；止盈分三档各 1 手"
+        how = (
+            "触发价=CCI死叉近似价；现价已越过则别等更高价。开仓/止盈「小于等于」，止损「大于等于」"
+            if crossed
+            else "触发价=CCI死叉近似价；挂「最新价≤触发价」开空。止盈「小于等于」，止损「大于等于」"
+        )
     elif row["long_lots"] > 0:
         state = f"持多{int(row['long_lots'])}手"
         need_order = True
