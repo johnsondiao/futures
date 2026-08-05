@@ -19,10 +19,6 @@ class ChannelSignalDetector(
     private val cciP: Int = 15,
     private val cciM: Int = 4,
 ) {
-    companion object {
-        private const val TAG = "SignalDetector"
-    }
-
     data class OpenSignal(val kind: String, val time: Long, val barTime: String)
 
     /** 已响过的开仓标记键："time|L" / "time|S"，与 app.js collectOpenKeys 一致。 */
@@ -166,6 +162,7 @@ class ChannelSignalDetector(
     }
 
     companion object {
+        private const val TAG = "SignalDetector"
         private fun Double.isNum(): Boolean = this.isFinite()
 
         /** 简单移动平均：i<n-1 时 NaN；窗口 [i-n+1, i] 任一元素非数则 NaN，否则均值。对齐 strategy.js ma。 */
