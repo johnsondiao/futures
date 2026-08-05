@@ -32,7 +32,6 @@ class OpenSignalNotifier(private val context: Context) {
         private const val NOTIFY_ID_BASE = 4200
     }
 
-    private var notifySeq = 0
     private val mainHandler = Handler(Looper.getMainLooper())
     /** 必须持有引用，否则 Ringtone 可能在播完前被 GC，听不到声音 */
     private var ringtoneRef: Ringtone? = null
@@ -152,7 +151,7 @@ class OpenSignalNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(true)
+            .setAutoCancel(false) // 点击不消失，必须手动划走
             .setContentIntent(pi)
             .setColor(color)
             .setOnlyAlertOnce(false)
@@ -167,11 +166,11 @@ class OpenSignalNotifier(private val context: Context) {
             if (defaults != 0) builder.setDefaults(defaults)
         }
 
-        notifySeq = (notifySeq + 1) % 1000
         return try {
+            // 固定 ID：新信号覆盖旧通知，保持通知栏只有一条最新的开仓提醒
             NotificationManagerCompat.from(context)
-                .notify(NOTIFY_ID_BASE + notifySeq, builder.build())
-            Log.d(TAG, "notifyOpen: 通知已发送 id=${NOTIFY_ID_BASE + notifySeq} title=$title")
+                .notify(NOTIFY_ID_BASE, builder.build())
+            Log.d(TAG, "notifyOpen: 通知已发送 id=$NOTIFY_ID_BASE title=$title")
             true
         } catch (e: SecurityException) {
             Log.e(TAG, "notifyOpen: SecurityException 发送失败", e)
