@@ -21,6 +21,10 @@ class DiffMdClient(
     private val viewWidth: Int = 2000,
     private val onStatus: (String) -> Unit,
     private val onBars: (JSONArray) -> Unit,
+    /** 鉴权失败（HTTP 401 或关闭码 1008）时触发，由上层决定是否重登 */
+    private val onAuthFailure: () -> Unit = {},
+    /** 非鉴权类断开时触发，由上层决定是否重连 */
+    private val onDisconnect: () -> Unit = {},
 ) {
     companion object {
         private const val DURATION_NS = 300L * 1_000_000_000L // 5m
@@ -84,11 +88,16 @@ class DiffMdClient(
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                if (!running.get()) return // 主动 stop 不触发重连
                 onStatus("行情断开: ${t.message}")
+                if (response?.code == 401) onAuthFailure() else onDisconnect()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                if (!running.get()) return // 主动 stop 不触发重连
                 onStatus("行情已关闭")
+                // 1008 = Policy Violation，常见于 token 失效被服务端踢
+                if (code == 1008) onAuthFailure() else onDisconnect()
             }
         })
     }

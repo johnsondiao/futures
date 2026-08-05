@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -30,6 +31,11 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val TAG = "MainActivity"
+        private const val REQ_NOTIFY = 1001
+    }
+
     private lateinit var webView: WebView
     private lateinit var swipe: SwipeRefreshLayout
     private lateinit var statusText: TextView
@@ -43,13 +49,33 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val auth = ShinnyAuth()
     private val openNotifier by lazy { OpenSignalNotifier(this) }
-    private var mdClient: DiffMdClient? = null
+    private var service: MarketForegroundService? = null
+    private var bound = false
     private var pageReady = false
     private var pendingBars: JSONArray? = null
     private var lastPushMs = 0L
 
-    companion object {
-        private const val REQ_NOTIFY = 1001
+    private val activityListener = object : MarketForegroundService.Listener {
+        override fun onBars(bars: JSONArray) {
+            pendingBars = bars
+            maybePushBars()
+        }
+        override fun onStatus(msg: String) {
+            statusText.text = msg
+        }
+        override fun onSessionExpired() {
+            reconnect()
+        }
+    }
+
+    private val serviceConn = object : android.content.ServiceConnection {
+        override fun onServiceConnected(name: android.content.ComponentName?, binder: android.os.IBinder?) {
+            service = (binder as? MarketForegroundService.LocalBinder)?.get()
+            service?.setListener(activityListener)
+        }
+        override fun onServiceDisconnected(name: android.content.ComponentName?) {
+            service = null
+        }
     }
 
     private val prefs by lazy {
@@ -121,7 +147,7 @@ class MainActivity : AppCompatActivity() {
                     mainHandler.post {
                         btnLogin.isEnabled = true
                         showBoard()
-                        startMd(session)
+                        startServiceWithSession(session)
                     }
                 } catch (e: Exception) {
                     mainHandler.post {
@@ -142,7 +168,7 @@ class MainActivity : AppCompatActivity() {
             io.execute {
                 try {
                     val session = auth.login(savedUser, savedPass)
-                    mainHandler.post { startMd(session) }
+                    mainHandler.post { startServiceWithSession(session) }
                 } catch (e: Exception) {
                     mainHandler.post {
                         showLogin()
@@ -156,12 +182,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun ensureNotifyPermission() {
+        openNotifier.ensureChannel()
+        // 1) 先检查渠道是否被用户手动禁用（这个比权限更常见）
+        if (openNotifier.isChannelBlockedByUser()) {
+            Log.w(TAG, "ensureNotifyPermission: 渠道 ${OpenSignalNotifier.CHANNEL_ID} 被用户禁用")
+            Toast.makeText(
+                this,
+                "「开仓信号提醒」渠道已被禁用：请到系统设置 → 应用 → 本应用 → 通知 → 开启「开仓信号提醒」",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        // 2) Android 13+ 请求 POST_NOTIFICATIONS 运行时权限
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         val granted = ContextCompat.checkSelfPermission(
             this,
             Manifest.permission.POST_NOTIFICATIONS
         ) == PackageManager.PERMISSION_GRANTED
         if (!granted) {
+            Log.d(TAG, "ensureNotifyPermission: 请求 POST_NOTIFICATIONS 权限")
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.POST_NOTIFICATIONS),
@@ -170,10 +208,31 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_NOTIFY) {
+            val granted = grantResults.isNotEmpty() &&
+                grantResults[0] == PackageManager.PERMISSION_GRANTED
+            Log.d(TAG, "onRequestPermissionsResult: POST_NOTIFICATIONS granted=$granted")
+            if (!granted) {
+                Toast.makeText(
+                    this,
+                    "未授予通知权限：后台时将看不到系统通知栏提醒（仍有声音/震动）",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(this, "通知权限已授予", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     private fun showLogin() {
         loginRoot.visibility = View.VISIBLE
         boardRoot.visibility = View.GONE
-        mdClient?.stop()
     }
 
     private fun showBoard() {
@@ -183,18 +242,30 @@ class MainActivity : AppCompatActivity() {
         webView.loadUrl("file:///android_asset/www/index.html")
     }
 
-    private fun startMd(session: ShinnyAuth.Session) {
-        mdClient?.stop()
-        mdClient = DiffMdClient(
-            symbol = "DCE.a2609",
-            onStatus = { msg -> mainHandler.post { statusText.text = msg } },
-            onBars = { bars ->
-                mainHandler.post {
-                    pendingBars = bars
-                    maybePushBars()
-                }
-            }
-        ).also { it.start(session) }
+    /** 启动行情前台服务并绑定；session 通过 Intent 传入，Service 自行 startMd */
+    private fun startServiceWithSession(session: ShinnyAuth.Session) {
+        val user = prefs.getString("tq_user", null)
+        val pass = prefs.getString("tq_pass", null)
+        val intent = Intent(this, MarketForegroundService::class.java).apply {
+            if (!user.isNullOrBlank()) putExtra(MarketForegroundService.EXTRA_USER, user)
+            if (!pass.isNullOrBlank()) putExtra(MarketForegroundService.EXTRA_PASS, pass)
+            putExtra(MarketForegroundService.EXTRA_ACCESS_TOKEN, session.accessToken)
+            putExtra(MarketForegroundService.EXTRA_MD_URL, session.mdUrl)
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        if (!bound) {
+            bound = true
+            bindService(
+                Intent(this, MarketForegroundService::class.java),
+                serviceConn,
+                android.content.Context.BIND_AUTO_CREATE
+            )
+        }
+        service?.startWithSession(session)
     }
 
     private fun reconnect() {
@@ -208,7 +279,10 @@ class MainActivity : AppCompatActivity() {
         io.execute {
             try {
                 val session = auth.login(user, pass)
-                mainHandler.post { startMd(session) }
+                mainHandler.post {
+                    val s = service
+                    if (s != null) s.updateSession(session) else startServiceWithSession(session)
+                }
             } catch (e: Exception) {
                 mainHandler.post {
                     statusText.text = "重连失败：${e.message}"
@@ -241,7 +315,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        /** JS 检测到 K 线新出现「开多/开空」标记时调用。kind: long|short */
+        /** @deprecated 开仓响铃改由 MarketForegroundService 的 ChannelSignalDetector 原生触发，
+         *  新版 app.js 不再调用本接口；保留仅为兼容旧 JS 缓存。 */
+        @Deprecated("改由原生 ChannelSignalDetector 触发，新 JS 不再调用")
         @JavascriptInterface
         fun notifyOpenSignal(kind: String, title: String, body: String) {
             mainHandler.post {
@@ -275,6 +351,7 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun testOpenAlert() {
             mainHandler.post {
+                openNotifier.ensureChannel()
                 if (!prefs.getBoolean("alert_enabled", true)) {
                     Toast.makeText(
                         this@MainActivity,
@@ -294,11 +371,22 @@ class MainActivity : AppCompatActivity() {
                     vibrate = true,
                     notification = notification,
                 )
+                val channelBlocked = openNotifier.isChannelBlockedByUser()
+                val permGranted = openNotifier.canPostNotification()
+                Log.d(
+                    TAG,
+                    "testOpenAlert: notification=$notification posted=$posted " +
+                        "channelBlocked=$channelBlocked canPost=$permGranted"
+                )
                 val msg = when {
-                    notification && !posted ->
+                    notification && channelBlocked ->
+                        "已震动/响铃，但「开仓信号提醒」渠道被禁用：请到系统设置里开启该渠道"
+                    notification && !permGranted ->
                         "已震动/响铃，但系统通知被拒：请到手机设置里允许本应用通知"
+                    notification && !posted ->
+                        "已震动/响铃，但系统通知发送失败（请检查通知设置）"
                     notification ->
-                        "试听已发送：提示音 + 震动 + 通知栏"
+                        "试听已发送：提示音 + 震动 + 通知栏（若没看到通知，请检查系统勿扰模式）"
                     else ->
                         "试听已发送：提示音 + 震动（未开系统通知）"
                 }
@@ -344,8 +432,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 前台时恢复向 WebView 推送 bars（Service 的 detector 始终运行）
+        service?.setListener(activityListener)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // 切后台停止推 WebView（JS 会暂停），但 Service 继续保活 + 检测开仓信号
+        service?.setListener(null)
+    }
+
     override fun onDestroy() {
-        mdClient?.stop()
+        if (bound) {
+            unbindService(serviceConn)
+            bound = false
+        }
+        // 不 stopService：前台服务继续运行，保持后台行情与开仓提醒
         super.onDestroy()
     }
 

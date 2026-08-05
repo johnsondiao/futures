@@ -507,27 +507,6 @@
     return keys;
   }
 
-  function playBeep(kind) {
-    try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-      const ctx = new Ctx();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "sine";
-      o.frequency.value = kind === "long" ? 880 : 660;
-      g.gain.value = 0.0001;
-      o.connect(g);
-      g.connect(ctx.destination);
-      const now = ctx.currentTime;
-      g.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
-      o.start(now);
-      o.stop(now + 0.38);
-      setTimeout(() => ctx.close(), 500);
-    } catch (_) {}
-  }
-
   function showAlertToast(kind, text) {
     const box = document.getElementById("alertToast");
     if (!box) return;
@@ -541,51 +520,25 @@
   }
 
   function fireOpenAlert(kind, symbol, barTime) {
-    const cfg =
-      (window.ChannelPages && window.ChannelPages.getAlertSettings
-        ? window.ChannelPages.getAlertSettings()
-        : null) || {
-        enabled: true,
-        sound: true,
-        vibrate: true,
-        notification: true,
-        toast: true,
-      };
-    if (!cfg.enabled) return;
+    // 声音/震动/系统通知已由原生 MarketForegroundService 的 ChannelSignalDetector 统一触发，
+    // 此处仅在前台显示 toast 做可视化增强，避免前后台双响。
+    let cfg = null;
+    if (window.ChannelBridge && window.ChannelBridge.getAlertSettings) {
+      try { cfg = JSON.parse(window.ChannelBridge.getAlertSettings()); } catch (_) {}
+    }
+    cfg = cfg || { enabled: true, toast: true };
+    if (!cfg.enabled || !cfg.toast) return;
 
     const label = kind === "long" ? "开多" : "开空";
     const title = label + "信号";
-    const body = (symbol || "合约") + " K线出现「" + label + "」标记 · " + (barTime || "");
-    if (cfg.toast) showAlertToast(kind, title + " · " + (symbol || ""));
-
-    if (window.ChannelBridge && window.ChannelBridge.notifyOpenSignal) {
-      try {
-        // 原生侧再按设置决定声音/震动/通知
-        window.ChannelBridge.notifyOpenSignal(kind, title, body);
-        // WebView 内再补一声，避免个别机型原生 Ringtone 被静音
-        if (cfg.sound) playBeep(kind);
-        return;
-      } catch (_) {}
-    }
-    if (cfg.sound) playBeep(kind);
-    if (cfg.notification) {
-      try {
-        if (typeof Notification !== "undefined") {
-          if (Notification.permission === "granted") {
-            new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
-          } else if (Notification.permission === "default") {
-            Notification.requestPermission().then((p) => {
-              if (p === "granted") {
-                new Notification(title, { body: body, tag: "open-" + kind + "-" + barTime });
-              }
-            });
-          }
-        }
-      } catch (_) {}
-    }
+    showAlertToast(kind, title + " · " + (symbol || ""));
   }
 
   window.__testOpenAlert = function () {
+    // 试听走原生通道（声音+震动+通知），与后台响铃路径一致
+    if (window.ChannelBridge && window.ChannelBridge.testOpenAlert) {
+      try { window.ChannelBridge.testOpenAlert(); return; } catch (_) {}
+    }
     fireOpenAlert("long", "TEST", "试听");
   };
 

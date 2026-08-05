@@ -16,6 +16,7 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
@@ -25,8 +26,9 @@ import androidx.core.app.NotificationManagerCompat
 class OpenSignalNotifier(private val context: Context) {
 
     companion object {
-        /** v2：强制重建频道（旧频道若曾以低优先级创建，系统不允许就地改 importance） */
-        const val CHANNEL_ID = "open_signal_v2"
+        private const val TAG = "OpenSignalNotifier"
+        /** v3：每次 ensure 若发现 importance/声音被用户改坏，则删除重建 */
+        const val CHANNEL_ID = "open_signal_v3"
         private const val NOTIFY_ID_BASE = 4200
     }
 
@@ -39,7 +41,24 @@ class OpenSignalNotifier(private val context: Context) {
     fun ensureChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val mgr = context.getSystemService(NotificationManager::class.java) ?: return
-        if (mgr.getNotificationChannel(CHANNEL_ID) != null) return
+        val existing = mgr.getNotificationChannel(CHANNEL_ID)
+        if (existing != null) {
+            // 用户手动把渠道 importance 降到 NONE 或关掉了声音 → 删掉重建
+            val importanceOk = existing.importance >= NotificationManager.IMPORTANCE_HIGH
+            val soundOk = existing.sound != null
+            if (importanceOk && soundOk) {
+                Log.d(TAG, "ensureChannel: 渠道 $CHANNEL_ID 正常，跳过")
+                return
+            }
+            Log.w(
+                TAG,
+                "ensureChannel: 旧渠道 importance=${existing.importance} sound=${existing.sound}，删除重建"
+            )
+            try {
+                mgr.deleteNotificationChannel(CHANNEL_ID)
+            } catch (_: Exception) {
+            }
+        }
         val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
@@ -59,15 +78,42 @@ class OpenSignalNotifier(private val context: Context) {
             setSound(sound, attrs)
         }
         mgr.createNotificationChannel(channel)
+        Log.d(TAG, "ensureChannel: 渠道 $CHANNEL_ID 已创建 (IMPORTANCE_HIGH + 自定义声音/震动)")
     }
 
     fun canPostNotification(): Boolean {
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+            Log.w(TAG, "canPostNotification: App 级通知开关关闭")
+            return false
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+            val granted = context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
                 android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                Log.w(TAG, "canPostNotification: POST_NOTIFICATIONS 权限未授予")
+                return false
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = context.getSystemService(NotificationManager::class.java)
+            val ch = mgr?.getNotificationChannel(CHANNEL_ID)
+            if (ch != null && ch.importance == NotificationManager.IMPORTANCE_NONE) {
+                Log.w(TAG, "canPostNotification: 渠道 $CHANNEL_ID 被用户禁用 (importance=NONE)")
+                return false
+            }
         }
         return true
+    }
+
+    /**
+     * 返回渠道是否被用户关掉（importance=NONE）；仅用于 UI 层提示用户去设置里开。
+     * O 以下版本永远返回 false。
+     */
+    fun isChannelBlockedByUser(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val mgr = context.getSystemService(NotificationManager::class.java) ?: return false
+        val ch = mgr.getNotificationChannel(CHANNEL_ID) ?: return false
+        return ch.importance == NotificationManager.IMPORTANCE_NONE
     }
 
     fun notifyOpen(
@@ -81,8 +127,14 @@ class OpenSignalNotifier(private val context: Context) {
         ensureChannel()
         if (sound) playSound()
         if (vibrate) vibrate()
-        if (!notification) return true
-        if (!canPostNotification()) return false
+        if (!notification) {
+            Log.d(TAG, "notifyOpen: notification=false，跳过系统通知（已播声音+震动）")
+            return true
+        }
+        if (!canPostNotification()) {
+            Log.w(TAG, "notifyOpen: 无通知权限/渠道被禁，放弃发送 title=$title")
+            return false
+        }
 
         val launch = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -104,21 +156,28 @@ class OpenSignalNotifier(private val context: Context) {
             .setContentIntent(pi)
             .setColor(color)
             .setOnlyAlertOnce(false)
+            // Android O+ 声音/震动由 NotificationChannel 控制，这里一律 setSilent(false)
+            // 不调用 setDefaults，避免与 Channel 配置冲突导致部分设备无声音
             .setSilent(false)
 
-        if (sound || vibrate) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             var defaults = 0
             if (sound) defaults = defaults or NotificationCompat.DEFAULT_SOUND
             if (vibrate) defaults = defaults or NotificationCompat.DEFAULT_VIBRATE
-            builder.setDefaults(defaults)
+            if (defaults != 0) builder.setDefaults(defaults)
         }
 
         notifySeq = (notifySeq + 1) % 1000
         return try {
             NotificationManagerCompat.from(context)
                 .notify(NOTIFY_ID_BASE + notifySeq, builder.build())
+            Log.d(TAG, "notifyOpen: 通知已发送 id=${NOTIFY_ID_BASE + notifySeq} title=$title")
             true
-        } catch (_: SecurityException) {
+        } catch (e: SecurityException) {
+            Log.e(TAG, "notifyOpen: SecurityException 发送失败", e)
+            false
+        } catch (e: Exception) {
+            Log.e(TAG, "notifyOpen: 发送失败", e)
             false
         }
     }
