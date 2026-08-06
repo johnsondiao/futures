@@ -13,6 +13,7 @@ import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -29,7 +30,8 @@ class OpenSignalNotifier(private val context: Context) {
         private const val TAG = "OpenSignalNotifier"
         /** v3：每次 ensure 若发现 importance/声音被用户改坏，则删除重建 */
         const val CHANNEL_ID = "open_signal_v3"
-        private const val NOTIFY_ID_BASE = 4200
+        const val NOTIFY_ID = 4200
+        const val ACTION_DISMISS_ALERT = "com.futures.channel.DISMISS_ALERT"
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -126,6 +128,7 @@ class OpenSignalNotifier(private val context: Context) {
         ensureChannel()
         if (sound) playSound()
         if (vibrate) vibrate()
+        wakeScreen() // 亮屏，确保用户能看到提醒
         if (!notification) {
             Log.d(TAG, "notifyOpen: notification=false，跳过系统通知（已播声音+震动）")
             return true
@@ -135,12 +138,27 @@ class OpenSignalNotifier(private val context: Context) {
             return false
         }
 
+        val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+
+        // 点击通知 → 打开 App
         val launch = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val piFlags = PendingIntent.FLAG_UPDATE_CURRENT or
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
         val pi = PendingIntent.getActivity(context, 0, launch, piFlags)
+
+        // 全屏 Intent：直接弹到 App 前台，最大化提醒（需 USE_FULL_SCREEN_INTENT 权限）
+        val fullScreenIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val fullScreenPi = PendingIntent.getActivity(context, 1, fullScreenIntent, piFlags)
+
+        // 清除按钮 → 打开 App 并自动清除通知
+        val dismissIntent = Intent(context, MainActivity::class.java).apply {
+            action = ACTION_DISMISS_ALERT
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val dismissPi = PendingIntent.getActivity(context, 2, dismissIntent, piFlags)
 
         val color = if (kind == "long") 0xFFD32F2F.toInt() else 0xFF2E7D32.toInt()
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -151,13 +169,14 @@ class OpenSignalNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(false) // 点击不消失，必须手动划走
+            .setAutoCancel(false)
+            .setOngoing(true) // 常驻通知：小米 HyperOS 灵动岛只接管常驻通知
             .setContentIntent(pi)
+            .setFullScreenIntent(fullScreenPi, true) // 全屏弹出
             .setColor(color)
             .setOnlyAlertOnce(false)
-            // Android O+ 声音/震动由 NotificationChannel 控制，这里一律 setSilent(false)
-            // 不调用 setDefaults，避免与 Channel 配置冲突导致部分设备无声音
             .setSilent(false)
+            .addAction(0, "✕ 清除提醒", dismissPi) // 手动清除按钮
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
             var defaults = 0
@@ -169,8 +188,8 @@ class OpenSignalNotifier(private val context: Context) {
         return try {
             // 固定 ID：新信号覆盖旧通知，保持通知栏只有一条最新的开仓提醒
             NotificationManagerCompat.from(context)
-                .notify(NOTIFY_ID_BASE, builder.build())
-            Log.d(TAG, "notifyOpen: 通知已发送 id=$NOTIFY_ID_BASE title=$title")
+                .notify(NOTIFY_ID, builder.build())
+            Log.d(TAG, "notifyOpen: 通知已发送 id=$NOTIFY_ID title=$title (ongoing + fullScreen)")
             true
         } catch (e: SecurityException) {
             Log.e(TAG, "notifyOpen: SecurityException 发送失败", e)
@@ -178,6 +197,35 @@ class OpenSignalNotifier(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "notifyOpen: 发送失败", e)
             false
+        }
+    }
+
+    /** 手动清除开仓通知（供 MainActivity onNewIntent 调用） */
+    fun cancelAlert() {
+        try {
+            NotificationManagerCompat.from(context).cancel(NOTIFY_ID)
+            Log.d(TAG, "cancelAlert: 已清除开仓通知 id=$NOTIFY_ID")
+        } catch (e: Exception) {
+            Log.e(TAG, "cancelAlert: 清除失败", e)
+        }
+    }
+
+    /** 短暂点亮屏幕，确保用户注意到提醒 */
+    private fun wakeScreen() {
+        try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+            @Suppress("DEPRECATION")
+            val wl = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "ChannelStrategy:WakeOnSignal"
+            )
+            wl.acquire(5000) // 5 秒后自动释放
+            mainHandler.postDelayed({
+                try { if (wl.isHeld) wl.release() } catch (_: Exception) {}
+            }, 5000)
+            Log.d(TAG, "wakeScreen: 已点亮屏幕")
+        } catch (e: Exception) {
+            Log.w(TAG, "wakeScreen: 点亮失败", e)
         }
     }
 

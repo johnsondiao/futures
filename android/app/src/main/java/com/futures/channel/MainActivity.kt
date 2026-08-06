@@ -182,6 +182,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // 处理通知「✕ 清除提醒」按钮
+        if (intent?.action == OpenSignalNotifier.ACTION_DISMISS_ALERT) {
+            openNotifier.cancelAlert()
+            Log.d(TAG, "onNewIntent: 用户从通知清除提醒")
+        }
+    }
+
     private fun ensureNotifyPermission() {
         openNotifier.ensureChannel()
         // 1) 先检查渠道是否被用户手动禁用（这个比权限更常见）
