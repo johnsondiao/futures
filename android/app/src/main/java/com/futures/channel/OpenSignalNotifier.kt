@@ -276,17 +276,26 @@ class OpenSignalNotifier(private val context: Context) {
             } else {
                 @Suppress("DEPRECATION")
                 context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
-            } ?: return
-            if (!vibrator.hasVibrator()) return
+            }
+            if (vibrator == null) {
+                Log.w(TAG, "vibrate: Vibrator 服务不可用")
+                return
+            }
+            if (!vibrator.hasVibrator()) {
+                Log.w(TAG, "vibrate: 设备无震动器")
+                return
+            }
+            val pattern = longArrayOf(0, 300, 100, 300)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(
-                    VibrationEffect.createWaveform(longArrayOf(0, 220, 120, 220), -1)
-                )
+                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                Log.d(TAG, "vibrate: VibrationEffect.createWaveform 已调用")
             } else {
                 @Suppress("DEPRECATION")
-                vibrator.vibrate(longArrayOf(0, 220, 120, 220), -1)
+                vibrator.vibrate(pattern, -1)
+                Log.d(TAG, "vibrate: deprecated vibrate(pattern) 已调用")
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "vibrate: 震动失败", e)
         }
     }
 }
