@@ -1,19 +1,27 @@
 package com.futures.channel
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Binder
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -44,6 +52,10 @@ class MarketForegroundService : Service() {
         private const val RECONNECT_DELAY_MS = 5000L
         private const val WAKE_LOCK_TAG = "ChannelStrategy:MarketMd"
         private const val WAKE_LOCK_TIMEOUT_MS = 12L * 60 * 60 * 1000 // 12h 上限防泄漏
+        private const val WAKE_LOCK_RENEW_INTERVAL_MS = 60L * 60 * 1000 // 每小时续期一次
+        private const val ALARM_HEARTBEAT_INTERVAL_MS = 60_000L // 60s AlarmManager 兜底
+        private const val ALARM_REQUEST_CODE = 4201
+        private const val ACTION_HEARTBEAT_ALARM = "com.futures.channel.HEARTBEAT_ALARM"
         private const val PREFS_NAME = "ths_secure"
     }
 
@@ -82,6 +94,45 @@ class MarketForegroundService : Service() {
         ).apply { setReferenceCounted(false) }
     }
 
+    private val alarmManager by lazy { getSystemService(ALARM_SERVICE) as AlarmManager }
+
+    private val wakeLockRenewHandler = Handler(Looper.getMainLooper())
+    private var wakeLockRenewTask: Runnable? = null
+
+    private val networkCallback by lazy {
+        object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                Log.i(TAG, "onNetworkAvailable: 网络恢复，主动重连")
+                mainHandler.post {
+                    onStatusInternal("网络已恢复，重连行情…")
+                    // 若已断开则立即重连，否则触发心跳探活
+                    val md = mdClient
+                    if (md == null || !md.isAlive()) {
+                        scheduleReconnect()
+                    } else {
+                        md.pokeHeartbeat()
+                    }
+                }
+            }
+        }
+    }
+
+    private val heartbeatAlarmReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_HEARTBEAT_ALARM) return
+            Log.d(TAG, "heartbeatAlarmReceiver: AlarmManager 触发兜底心跳")
+            // 唤醒 CPU 后再触发心跳检测
+            if (wakeLock.isHeld.not()) {
+                try { wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS) } catch (_: Exception) {}
+            }
+            mdClient?.pokeHeartbeat()
+            // 重新设定下一次闹钟（实现周期性兜底）
+            scheduleNextHeartbeatAlarm()
+        }
+    }
+
+    private var networkRegistered = false
+
     private val prefs by lazy { openSecurePrefs() }
 
     override fun onCreate() {
@@ -90,6 +141,10 @@ class MarketForegroundService : Service() {
         if (wakeLock.isHeld.not()) {
             wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
         }
+        startWakeLockRenew()
+        registerHeartbeatAlarmReceiver()
+        registerNetworkCallback()
+        scheduleNextHeartbeatAlarm()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -129,9 +184,15 @@ class MarketForegroundService : Service() {
     override fun onDestroy() {
         reconnectTask?.let { reconnectHandler.removeCallbacks(it) }
         reconnectTask = null
-        mdClient?.stop()
+        stopWakeLockRenew()
+        cancelHeartbeatAlarm()
+        unregisterHeartbeatAlarmReceiver()
+        unregisterNetworkCallback()
+        mdClient?.destroy()
         mdClient = null
-        if (wakeLock.isHeld) wakeLock.release()
+        if (wakeLock.isHeld) {
+            try { wakeLock.release() } catch (_: Exception) {}
+        }
         super.onDestroy()
     }
 
@@ -155,7 +216,8 @@ class MarketForegroundService : Service() {
 
     private fun startMd(session: ShinnyAuth.Session) {
         this.session = session
-        mdClient?.stop()
+        // 彻底销毁旧实例，避免 HandlerThread 泄漏
+        mdClient?.destroy()
         mdClient = DiffMdClient(
             symbol = "DCE.a2609",
             onStatus = { msg -> mainHandler.post { onStatusInternal(msg) } },
@@ -322,6 +384,120 @@ class MarketForegroundService : Service() {
         } else {
             startForeground(NOTIFY_ID, notification)
         }
+    }
+
+    // ===== WakeLock 周期续期（避免12h后过期）=====
+
+    private fun startWakeLockRenew() {
+        stopWakeLockRenew()
+        val r = Runnable {
+            try {
+                if (wakeLock.isHeld) wakeLock.release()
+                wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+                Log.d(TAG, "wakeLockRenew: 已续期，next ${WAKE_LOCK_RENEW_INTERVAL_MS / 60000}min 后")
+            } catch (e: Exception) {
+                Log.e(TAG, "wakeLockRenew: 续期失败", e)
+            }
+            wakeLockRenewHandler.postDelayed(this@MarketForegroundService.wakeLockRenewTask!!, WAKE_LOCK_RENEW_INTERVAL_MS)
+        }
+        wakeLockRenewTask = r
+        wakeLockRenewHandler.postDelayed(r, WAKE_LOCK_RENEW_INTERVAL_MS)
+    }
+
+    private fun stopWakeLockRenew() {
+        wakeLockRenewTask?.let { wakeLockRenewHandler.removeCallbacks(it) }
+        wakeLockRenewTask = null
+    }
+
+    // ===== AlarmManager 兜底心跳（Doze 下唯一可靠途径）=====
+
+    private fun registerHeartbeatAlarmReceiver() {
+        val filter = IntentFilter(ACTION_HEARTBEAT_ALARM)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(heartbeatAlarmReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(heartbeatAlarmReceiver, filter)
+        }
+    }
+
+    private fun unregisterHeartbeatAlarmReceiver() {
+        try { unregisterReceiver(heartbeatAlarmReceiver) } catch (_: Exception) {}
+    }
+
+    private fun scheduleNextHeartbeatAlarm() {
+        val triggerAt = SystemClock.elapsedRealtime() + ALARM_HEARTBEAT_INTERVAL_MS
+        val pi = buildHeartbeatPendingIntent()
+        try {
+            when {
+                // Android 12+ 需要 SCHEDULE_EXACT_ALARM 权限（Manifest 声明，用户可在设置撤销）
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                    alarmManager.canScheduleExactAlarmsCompat() -> {
+                    alarmManager.setExactAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerAt,
+                        pi
+                    )
+                    Log.d(TAG, "scheduleNextHeartbeatAlarm: setExactAndAllowWhileIdle 已设定")
+                }
+                // 降级：不需要精确闹钟权限，Doze 下会延迟到维护窗口，但优于无
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                        triggerAt,
+                        pi
+                    )
+                    Log.d(TAG, "scheduleNextHeartbeatAlarm: 降级 setAndAllowWhileIdle")
+                }
+                else -> {
+                    @Suppress("DEPRECATION")
+                    alarmManager.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "scheduleNextHeartbeatAlarm: 设定失败", e)
+        }
+    }
+
+    private fun AlarmManager.canScheduleExactAlarmsCompat(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            canScheduleExactAlarms()
+        } else true
+    }
+
+    private fun cancelHeartbeatAlarm() {
+        try { alarmManager.cancel(buildHeartbeatPendingIntent()) } catch (_: Exception) {}
+    }
+
+    private fun buildHeartbeatPendingIntent(): PendingIntent {
+        val intent = Intent(ACTION_HEARTBEAT_ALARM).apply { setPackage(packageName) }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
+        return PendingIntent.getBroadcast(this, ALARM_REQUEST_CODE, intent, flags)
+    }
+
+    // ===== 网络变化监听 =====
+
+    private fun registerNetworkCallback() {
+        if (networkRegistered) return
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+        try {
+            cm.registerNetworkCallback(request, networkCallback)
+            networkRegistered = true
+            Log.d(TAG, "registerNetworkCallback: 已注册网络监听")
+        } catch (e: Exception) {
+            Log.e(TAG, "registerNetworkCallback: 注册失败", e)
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        if (!networkRegistered) return
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        try { cm.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        networkRegistered = false
     }
 
     private fun openSecurePrefs() = EncryptedSharedPreferences.create(

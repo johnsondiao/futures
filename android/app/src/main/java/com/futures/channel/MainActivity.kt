@@ -4,10 +4,13 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.webkit.JavascriptInterface
@@ -35,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val REQ_NOTIFY = 1001
+        private const val REQ_BATTERY_OPT = 1002
+        private const val PREF_KEY_BATTERY_PROMPTED = "battery_opt_prompted"
     }
 
     private lateinit var webView: WebView
@@ -218,6 +223,46 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 引导用户将 App 加入电池优化白名单。
+     * - 进入白名单后，App 不受 Doze 网络冻结限制，后台 WebSocket 可稳定保活
+     * - 仅在首次进入盘面时提示一次（用 SharedPreferences 记录），避免反复打扰
+     */
+    private fun ensureBatteryOptimizationWhitelist() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) {
+            Log.d(TAG, "ensureBatteryOptimizationWhitelist: 已在白名单")
+            return
+        }
+        if (prefs.getBoolean(PREF_KEY_BATTERY_PROMPTED, false)) {
+            Log.d(TAG, "ensureBatteryOptimizationWhitelist: 已提示过，跳过")
+            return
+        }
+        prefs.edit().putBoolean(PREF_KEY_BATTERY_PROMPTED, true).apply()
+        Toast.makeText(
+            this,
+            "为确保后台行情持续更新，请在接下来弹出的窗口中选择「允许」",
+            Toast.LENGTH_LONG
+        ).show()
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = Uri.parse("package:$packageName")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            @Suppress("DEPRECATION")
+            startActivityForResult(intent, REQ_BATTERY_OPT)
+        } catch (e: Exception) {
+            Log.w(TAG, "ensureBatteryOptimizationWhitelist: 直接请求失败，跳转设置页", e)
+            try {
+                val fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                startActivity(fallback)
+            } catch (_: Exception) {
+                Toast.makeText(this, "请手动到设置 → 电池 → 后台限制，将本应用设为不优化", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -249,6 +294,7 @@ class MainActivity : AppCompatActivity() {
         loginRoot.visibility = View.GONE
         boardRoot.visibility = View.VISIBLE
         ensureNotifyPermission()
+        ensureBatteryOptimizationWhitelist()
         webView.loadUrl("file:///android_asset/www/index.html")
     }
 
