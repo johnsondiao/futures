@@ -55,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val auth = ShinnyAuth()
     private val openNotifier by lazy { OpenSignalNotifier(this) }
+    private val feishuNotifier by lazy { FeishuWebhookNotifier() }
     private var service: MarketForegroundService? = null
     private var bound = false
     private var pageReady = false
@@ -458,6 +459,8 @@ class MainActivity : AppCompatActivity() {
                 .put("vibrate", prefs.getBoolean("alert_vibrate", true))
                 .put("notification", prefs.getBoolean("alert_notification", true))
                 .put("toast", prefs.getBoolean("alert_toast", true))
+                .put("feishu_enabled", prefs.getBoolean("alert_feishu_enabled", true))
+                .put("feishu_webhook", prefs.getString("alert_feishu_webhook", "") ?: "")
                 .toString()
         }
 
@@ -471,11 +474,35 @@ class MainActivity : AppCompatActivity() {
                     .putBoolean("alert_vibrate", o.optBoolean("vibrate", true))
                     .putBoolean("alert_notification", o.optBoolean("notification", true))
                     .putBoolean("alert_toast", o.optBoolean("toast", true))
+                    .putBoolean("alert_feishu_enabled", o.optBoolean("feishu_enabled", true))
+                    .putString(
+                        "alert_feishu_webhook",
+                        o.optString("feishu_webhook", "")
+                            ?.trim()
+                            ?.ifBlank { null }
+                    )
                     .apply()
                 if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
                     mainHandler.post { ensureNotifyPermission() }
                 }
             } catch (_: Exception) {
+            }
+        }
+
+        /** 飞书测试推送：在 io 线程执行，通过 JS 回调把结果字符串返回给 UI */
+        @JavascriptInterface
+        fun testFeishuWebhook(webhook: String, callback: String) {
+            if (webhook.isBlank()) {
+                val js = "$callback && $callback(${(JSONObject().put("ok", false).put("msg", "请先填写 Webhook URL")).toString()});"
+                mainHandler.post { webView.evaluateJavascript(js, null) }
+                return
+            }
+            io.execute {
+                val result = feishuNotifier.test(webhook.trim())
+                val ok = result.startsWith("✅")
+                val json = JSONObject().put("ok", ok).put("msg", result)
+                val js = "$callback && $callback($json);"
+                mainHandler.post { webView.evaluateJavascript(js, null) }
             }
         }
 

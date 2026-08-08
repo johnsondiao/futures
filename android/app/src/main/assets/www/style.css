@@ -181,6 +181,78 @@ body.panel-open {
   font-weight: 700;
 }
 .primary-btn:active { background: #006064; }
+.primary-btn:disabled { background: #90a4ae; }
+
+.ghost-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  border: 1.5px solid #00838f;
+  border-radius: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  color: #00838f;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ghost-btn:active { background: #e0f7fa; }
+.ghost-btn:disabled { border-color: #b0bec5; color: #b0bec5; }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 8px;
+}
+.btn-row > .primary-btn,
+.btn-row > .ghost-btn {
+  flex: 1;
+  margin-top: 18px;
+}
+
+.input-row {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: #f8fafb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.input-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+.text-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.text-input:focus {
+  border-color: #00838f;
+  box-shadow: 0 0 0 3px rgba(0,131,143,0.15);
+}
+.text-input:disabled {
+  background: #f1f5f7;
+  color: #94a3b8;
+}
+.input-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #64748b;
+}
 
 .guide-body { padding-bottom: 48px; }
 .guide-block {
@@ -561,9 +633,13 @@ body.panel-open {
   font-weight: 700;
   box-shadow: 0 8px 24px rgba(16, 42, 67, 0.28);
   transition: opacity 0.2s ease, transform 0.2s ease;
+  word-break: break-word;
+  line-height: 1.4;
 }
 .alert-toast.long { background: #c62828; }
 .alert-toast.short { background: #2e7d32; }
+.alert-toast.feishu.ok { background: #1677ff; }
+.alert-toast.feishu.bad { background: #b42318; }
 .alert-toast[hidden] {
   display: block;
   opacity: 0;

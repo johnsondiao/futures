@@ -5,6 +5,8 @@
     vibrate: true,
     notification: true,
     toast: true,
+    feishu_enabled: true,
+    feishu_webhook: "",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -54,21 +56,30 @@
       setAlertVibrate: "vibrate",
       setAlertNotification: "notification",
       setAlertToast: "toast",
+      setFeishuEnabled: "feishu_enabled",
     };
     for (const id of Object.keys(map)) {
       const el = document.getElementById(id);
       if (el) el.checked = !!alertSettings[map[id]];
     }
+    const whEl = document.getElementById("setFeishuWebhook");
+    if (whEl) whEl.value = alertSettings.feishu_webhook || "";
+
     const masterOn = !!alertSettings.enabled;
     for (const id of [
       "setAlertSound",
       "setAlertVibrate",
       "setAlertNotification",
       "setAlertToast",
+      "setFeishuEnabled",
     ]) {
       const el = document.getElementById(id);
       if (el) el.disabled = !masterOn;
     }
+    const feishuOn = masterOn && !!alertSettings.feishu_enabled;
+    if (whEl) whEl.disabled = !feishuOn;
+    const testBtn = document.getElementById("btnTestFeishu");
+    if (testBtn) testBtn.disabled = !feishuOn;
   }
 
   function readSettingsFromUi() {
@@ -78,9 +89,26 @@
       vibrate: !!(document.getElementById("setAlertVibrate") || {}).checked,
       notification: !!(document.getElementById("setAlertNotification") || {}).checked,
       toast: !!(document.getElementById("setAlertToast") || {}).checked,
+      feishu_enabled: !!(document.getElementById("setFeishuEnabled") || {}).checked,
+      feishu_webhook:
+        (document.getElementById("setFeishuWebhook") || {}).value?.trim() || "",
     };
     pushNative();
     paintSettings();
+  }
+
+  function showFeishuResult(msg, ok) {
+    const box = document.getElementById("feishuToast");
+    if (!box) {
+      alert(msg);
+      return;
+    }
+    box.hidden = false;
+    box.className = "alert-toast feishu " + (ok ? "ok" : "bad");
+    box.textContent = msg;
+    setTimeout(() => {
+      box.hidden = true;
+    }, ok ? 4000 : 6000);
   }
 
   function openPanel(id) {
@@ -133,10 +161,19 @@
       "setAlertVibrate",
       "setAlertNotification",
       "setAlertToast",
+      "setFeishuEnabled",
     ].forEach((id) => {
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", readSettingsFromUi);
     });
+    const whEl = document.getElementById("setFeishuWebhook");
+    if (whEl) {
+      whEl.addEventListener("input", () => {
+        // 延迟一点保存，避免用户输入时被打断
+        clearTimeout(whEl._t);
+        whEl._t = setTimeout(readSettingsFromUi, 300);
+      });
+    }
 
     const testBtn = document.getElementById("btnTestAlert");
     if (testBtn) {
@@ -159,6 +196,44 @@
           } catch (_) {}
         }
         if (window.__testOpenAlert) window.__testOpenAlert();
+      });
+    }
+
+    const feishuTestBtn = document.getElementById("btnTestFeishu");
+    if (feishuTestBtn) {
+      feishuTestBtn.addEventListener("click", () => {
+        readSettingsFromUi();
+        const url = alertSettings.feishu_webhook;
+        if (!url) {
+          showFeishuResult("请先填写飞书机器人 Webhook URL", false);
+          return;
+        }
+        if (!(window.ChannelBridge && window.ChannelBridge.testFeishuWebhook)) {
+          showFeishuResult("当前版本不支持飞书推送，请更新 App", false);
+          return;
+        }
+        feishuTestBtn.disabled = true;
+        const oldLabel = feishuTestBtn.textContent;
+        feishuTestBtn.textContent = "推送中…";
+        const cbName =
+          "__feishu_cb_" + Math.random().toString(36).slice(2) + "_" + Date.now();
+        window[cbName] = function (o) {
+          try {
+            delete window[cbName];
+          } catch (_) {
+            window[cbName] = undefined;
+          }
+          feishuTestBtn.disabled = false;
+          feishuTestBtn.textContent = oldLabel;
+          showFeishuResult(o?.msg || "未知结果", !!o?.ok);
+        };
+        try {
+          window.ChannelBridge.testFeishuWebhook(url, cbName);
+        } catch (e) {
+          feishuTestBtn.disabled = false;
+          feishuTestBtn.textContent = oldLabel;
+          showFeishuResult("调用失败：" + (e.message || e), false);
+        }
       });
     }
   }

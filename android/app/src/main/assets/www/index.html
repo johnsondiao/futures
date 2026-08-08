@@ -60,6 +60,7 @@
 
   <footer class="foot">v2.3.2 · 止盈 1.5/3/5×ATR(20) · 本机策略 · 下拉刷新重连</footer>
   <div id="alertToast" class="alert-toast" hidden></div>
+  <div id="feishuToast" class="alert-toast feishu" hidden></div>
 
   <!-- 设置 -->
   <div id="panelSettings" class="page-panel" hidden>
@@ -107,8 +108,43 @@
         <input type="checkbox" id="setAlertToast" checked />
       </label>
 
-      <button type="button" id="btnTestAlert" class="primary-btn">试听一次提醒</button>
-      <p class="panel-note">设置保存在本机。点试听应有提示音+震动；若无系统通知，请到手机「设置 → 应用 → 通道策略 → 通知」允许通知，并确认通知类别「开仓信号提醒」未关闭。</p>
+      <h3 class="panel-section-title">飞书机器人推送（兜底防漏消息）</h3>
+      <p class="panel-desc">
+        即使用户关闭了系统通知、或手机静音、锁屏、App 在后台，
+        只要网络正常，飞书机器人依然能把信号推到群里（可同步推送到飞书手机通知、甚至可在飞书里配置短信/电话兜底提醒）。
+      </p>
+
+      <label class="switch-row">
+        <span>
+          <strong>启用飞书推送</strong>
+          <small>开仓时同步推送一条飞书机器人消息</small>
+        </span>
+        <input type="checkbox" id="setFeishuEnabled" checked />
+      </label>
+
+      <div class="input-row">
+        <label for="setFeishuWebhook" class="input-label">飞书自定义机器人 Webhook URL</label>
+        <input
+          type="text"
+          id="setFeishuWebhook"
+          class="text-input"
+          inputmode="url"
+          placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxx"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <small class="input-hint">
+          飞书建群 → 群设置 → 群机器人 → 「自定义机器人」→ 复制 Webhook URL 粘贴到此处。
+          可在机器人设置中加「关键词白名单」，例如加关键词：开多、开空、信号、测试。
+        </small>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" id="btnTestAlert" class="primary-btn">试听一次提醒</button>
+        <button type="button" id="btnTestFeishu" class="ghost-btn">测试飞书推送</button>
+      </div>
+
+      <p class="panel-note">设置保存在本机加密存储。</p>
     </div>
   </div>
 

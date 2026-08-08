@@ -78,6 +78,7 @@ class MarketForegroundService : Service() {
 
     private val notifier by lazy { OpenSignalNotifier(this) }
     private val detector by lazy { ChannelSignalDetector() }
+    private val feishu by lazy { FeishuWebhookNotifier() }
 
     @Volatile private var listener: Listener? = null
     private var mdClient: DiffMdClient? = null
@@ -262,19 +263,42 @@ class MarketForegroundService : Service() {
         val sound = prefs.getBoolean("alert_sound", true)
         val vibrate = prefs.getBoolean("alert_vibrate", true)
         val notification = prefs.getBoolean("alert_notification", true)
+        val feishuEnabled = prefs.getBoolean("alert_feishu_enabled", true)
+        val feishuWebhook = prefs.getString("alert_feishu_webhook", null)
         Log.d(
             TAG,
-            "fireOpen: kind=${sig.kind} sound=$sound vibrate=$vibrate notification=$notification"
+            "fireOpen: kind=${sig.kind} sound=$sound vibrate=$vibrate notification=$notification feishu=$feishuEnabled webhookSet=${!feishuWebhook.isNullOrBlank()}"
         )
         val label = if (sig.kind == "long") "开多" else "开空"
+        val body = "DCE.a2609 K线出现「${label}」标记 · ${sig.barTime}"
         val posted = notifier.notifyOpen(
             kind = sig.kind,
             title = "${label}信号",
-            body = "DCE.a2609 K线出现「${label}」标记 · ${sig.barTime}",
+            body = body,
             sound = sound,
             vibrate = vibrate,
             notification = notification,
         )
+        // ---- 兜底通道：飞书 Webhook ----
+        // 即使用户关闭了系统通知、或通知渠道被禁用，只要配置了 Webhook，
+        // 这里仍会把信号推送到飞书群，确保不会漏消息。
+        if (feishuEnabled && !feishuWebhook.isNullOrBlank()) {
+            io.execute {
+                Log.i(TAG, "fireOpen: 触发飞书推送 kind=${sig.kind}")
+                feishu.send(
+                    webhookUrl = feishuWebhook,
+                    kind = sig.kind,
+                    title = "${label}信号",
+                    body = body,
+                    extraLines = listOf(
+                        "信号时间: ${sig.barTime}",
+                        "合约: DCE.a2609 (豆二 2609)",
+                        "周期: 5分钟 K线",
+                        "来源: 通道突破策略"
+                    )
+                )
+            }
+        }
         if (notification && !posted) {
             // 失败：权限/渠道问题，把原因写入状态栏文本，方便用户自查
             val reason = when {
