@@ -78,7 +78,7 @@ class MarketForegroundService : Service() {
 
     private val notifier by lazy { OpenSignalNotifier(this) }
     private val detector by lazy { ChannelSignalDetector() }
-    private val feishu by lazy { FeishuWebhookNotifier() }
+    private val feishu by lazy { FeishuAppNotifier() }
 
     @Volatile private var listener: Listener? = null
     private var mdClient: DiffMdClient? = null
@@ -264,10 +264,14 @@ class MarketForegroundService : Service() {
         val vibrate = prefs.getBoolean("alert_vibrate", true)
         val notification = prefs.getBoolean("alert_notification", true)
         val feishuEnabled = prefs.getBoolean("alert_feishu_enabled", true)
-        val feishuWebhook = prefs.getString("alert_feishu_webhook", null)
+        val feishuAppId = prefs.getString("alert_feishu_app_id", null)
+        val feishuAppSecret = prefs.getString("alert_feishu_app_secret", null)
+        val feishuOpenId = prefs.getString("alert_feishu_open_id", null)
         Log.d(
             TAG,
-            "fireOpen: kind=${sig.kind} sound=$sound vibrate=$vibrate notification=$notification feishu=$feishuEnabled webhookSet=${!feishuWebhook.isNullOrBlank()}"
+            "fireOpen: kind=${sig.kind} sound=$sound vibrate=$vibrate notification=$notification " +
+                "feishu=$feishuEnabled appIdSet=${!feishuAppId.isNullOrBlank()} " +
+                "secretSet=${!feishuAppSecret.isNullOrBlank()} openIdSet=${!feishuOpenId.isNullOrBlank()}"
         )
         val label = if (sig.kind == "long") "开多" else "开空"
         val body = "DCE.a2609 K线出现「${label}」标记 · ${sig.barTime}"
@@ -279,14 +283,18 @@ class MarketForegroundService : Service() {
             vibrate = vibrate,
             notification = notification,
         )
-        // ---- 兜底通道：飞书 Webhook ----
-        // 即使用户关闭了系统通知、或通知渠道被禁用，只要配置了 Webhook，
-        // 这里仍会把信号推送到飞书群，确保不会漏消息。
-        if (feishuEnabled && !feishuWebhook.isNullOrBlank()) {
+        // ---- 兜底通道：飞书自建应用机器人（不需要建群，直接私聊机器人）----
+        // 即使用户关闭了系统通知、或通知渠道被禁用，只要配置了应用凭证，
+        // 这里仍会把信号推送到飞书机器人会话，确保不会漏消息。
+        if (feishuEnabled && !feishuAppId.isNullOrBlank() &&
+            !feishuAppSecret.isNullOrBlank() && !feishuOpenId.isNullOrBlank()
+        ) {
             io.execute {
                 Log.i(TAG, "fireOpen: 触发飞书推送 kind=${sig.kind}")
                 feishu.send(
-                    webhookUrl = feishuWebhook,
+                    appId = feishuAppId,
+                    appSecret = feishuAppSecret,
+                    openId = feishuOpenId,
                     kind = sig.kind,
                     title = "${label}信号",
                     body = body,

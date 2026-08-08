@@ -6,7 +6,9 @@
     notification: true,
     toast: true,
     feishu_enabled: true,
-    feishu_webhook: "",
+    feishu_app_id: "",
+    feishu_app_secret: "",
+    feishu_open_id: "",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -62,8 +64,17 @@
       const el = document.getElementById(id);
       if (el) el.checked = !!alertSettings[map[id]];
     }
-    const whEl = document.getElementById("setFeishuWebhook");
-    if (whEl) whEl.value = alertSettings.feishu_webhook || "";
+    const fieldMap = {
+      setFeishuAppId: "feishu_app_id",
+      setFeishuAppSecret: "feishu_app_secret",
+      setFeishuOpenId: "feishu_open_id",
+    };
+    for (const id of Object.keys(fieldMap)) {
+      const el = document.getElementById(id);
+      if (el && document.activeElement !== el) {
+        el.value = alertSettings[fieldMap[id]] || "";
+      }
+    }
 
     const masterOn = !!alertSettings.enabled;
     for (const id of [
@@ -77,7 +88,10 @@
       if (el) el.disabled = !masterOn;
     }
     const feishuOn = masterOn && !!alertSettings.feishu_enabled;
-    if (whEl) whEl.disabled = !feishuOn;
+    for (const id of ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"]) {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !feishuOn;
+    }
     const testBtn = document.getElementById("btnTestFeishu");
     if (testBtn) testBtn.disabled = !feishuOn;
   }
@@ -90,8 +104,12 @@
       notification: !!(document.getElementById("setAlertNotification") || {}).checked,
       toast: !!(document.getElementById("setAlertToast") || {}).checked,
       feishu_enabled: !!(document.getElementById("setFeishuEnabled") || {}).checked,
-      feishu_webhook:
-        (document.getElementById("setFeishuWebhook") || {}).value?.trim() || "",
+      feishu_app_id:
+        (document.getElementById("setFeishuAppId") || {}).value?.trim() || "",
+      feishu_app_secret:
+        (document.getElementById("setFeishuAppSecret") || {}).value?.trim() || "",
+      feishu_open_id:
+        (document.getElementById("setFeishuOpenId") || {}).value?.trim() || "",
     };
     pushNative();
     paintSettings();
@@ -141,6 +159,17 @@
     return { ...alertSettings };
   }
 
+  function bindInputWithDebounce(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => {
+      clearTimeout(el._t);
+      el._t = setTimeout(readSettingsFromUi, 300);
+    });
+    // 失焦立即保存，避免用户切后台丢内容
+    el.addEventListener("blur", readSettingsFromUi);
+  }
+
   function initPages() {
     loadLocal();
     paintSettings();
@@ -166,20 +195,12 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", readSettingsFromUi);
     });
-    const whEl = document.getElementById("setFeishuWebhook");
-    if (whEl) {
-      whEl.addEventListener("input", () => {
-        // 延迟一点保存，避免用户输入时被打断
-        clearTimeout(whEl._t);
-        whEl._t = setTimeout(readSettingsFromUi, 300);
-      });
-    }
+    ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"].forEach(bindInputWithDebounce);
 
     const testBtn = document.getElementById("btnTestAlert");
     if (testBtn) {
       testBtn.addEventListener("click", () => {
         readSettingsFromUi();
-        // 原生试听更可靠（ToneGenerator + 震动 + 系统通知）
         if (window.ChannelBridge && window.ChannelBridge.testOpenAlert) {
           try {
             window.ChannelBridge.testOpenAlert();
@@ -203,12 +224,14 @@
     if (feishuTestBtn) {
       feishuTestBtn.addEventListener("click", () => {
         readSettingsFromUi();
-        const url = alertSettings.feishu_webhook;
-        if (!url) {
-          showFeishuResult("请先填写飞书机器人 Webhook URL", false);
+        const appId = alertSettings.feishu_app_id;
+        const appSecret = alertSettings.feishu_app_secret;
+        const openId = alertSettings.feishu_open_id;
+        if (!appId || !appSecret || !openId) {
+          showFeishuResult("请先完整填写 App ID / App Secret / Open ID 三个字段", false);
           return;
         }
-        if (!(window.ChannelBridge && window.ChannelBridge.testFeishuWebhook)) {
+        if (!(window.ChannelBridge && window.ChannelBridge.testFeishuPush)) {
           showFeishuResult("当前版本不支持飞书推送，请更新 App", false);
           return;
         }
@@ -228,7 +251,7 @@
           showFeishuResult(o?.msg || "未知结果", !!o?.ok);
         };
         try {
-          window.ChannelBridge.testFeishuWebhook(url, cbName);
+          window.ChannelBridge.testFeishuPush(appId, appSecret, openId, cbName);
         } catch (e) {
           feishuTestBtn.disabled = false;
           feishuTestBtn.textContent = oldLabel;

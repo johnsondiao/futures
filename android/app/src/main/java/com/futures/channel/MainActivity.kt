@@ -55,7 +55,7 @@ class MainActivity : AppCompatActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val auth = ShinnyAuth()
     private val openNotifier by lazy { OpenSignalNotifier(this) }
-    private val feishuNotifier by lazy { FeishuWebhookNotifier() }
+    private val feishuNotifier by lazy { FeishuAppNotifier() }
     private var service: MarketForegroundService? = null
     private var bound = false
     private var pageReady = false
@@ -460,7 +460,9 @@ class MainActivity : AppCompatActivity() {
                 .put("notification", prefs.getBoolean("alert_notification", true))
                 .put("toast", prefs.getBoolean("alert_toast", true))
                 .put("feishu_enabled", prefs.getBoolean("alert_feishu_enabled", true))
-                .put("feishu_webhook", prefs.getString("alert_feishu_webhook", "") ?: "")
+                .put("feishu_app_id", prefs.getString("alert_feishu_app_id", "") ?: "")
+                .put("feishu_app_secret", prefs.getString("alert_feishu_app_secret", "") ?: "")
+                .put("feishu_open_id", prefs.getString("alert_feishu_open_id", "") ?: "")
                 .toString()
         }
 
@@ -476,10 +478,16 @@ class MainActivity : AppCompatActivity() {
                     .putBoolean("alert_toast", o.optBoolean("toast", true))
                     .putBoolean("alert_feishu_enabled", o.optBoolean("feishu_enabled", true))
                     .putString(
-                        "alert_feishu_webhook",
-                        o.optString("feishu_webhook", "")
-                            ?.trim()
-                            ?.ifBlank { null }
+                        "alert_feishu_app_id",
+                        o.optString("feishu_app_id", "").trim().ifBlank { null }
+                    )
+                    .putString(
+                        "alert_feishu_app_secret",
+                        o.optString("feishu_app_secret", "").trim().ifBlank { null }
+                    )
+                    .putString(
+                        "alert_feishu_open_id",
+                        o.optString("feishu_open_id", "").trim().ifBlank { null }
                     )
                     .apply()
                 if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
@@ -491,14 +499,21 @@ class MainActivity : AppCompatActivity() {
 
         /** 飞书测试推送：在 io 线程执行，通过 JS 回调把结果字符串返回给 UI */
         @JavascriptInterface
-        fun testFeishuWebhook(webhook: String, callback: String) {
-            if (webhook.isBlank()) {
-                val js = "$callback && $callback(${(JSONObject().put("ok", false).put("msg", "请先填写 Webhook URL")).toString()});"
+        fun testFeishuPush(appId: String, appSecret: String, openId: String, callback: String) {
+            val missing = when {
+                appId.isBlank() -> "请先填写 App ID"
+                appSecret.isBlank() -> "请先填写 App Secret"
+                openId.isBlank() -> "请先填写 Open ID（用户给机器人发一条消息后可拿到）"
+                else -> null
+            }
+            if (missing != null) {
+                val json = JSONObject().put("ok", false).put("msg", missing)
+                val js = "$callback && $callback($json);"
                 mainHandler.post { webView.evaluateJavascript(js, null) }
                 return
             }
             io.execute {
-                val result = feishuNotifier.test(webhook.trim())
+                val result = feishuNotifier.test(appId.trim(), appSecret.trim(), openId.trim())
                 val ok = result.startsWith("✅")
                 val json = JSONObject().put("ok", ok).put("msg", result)
                 val js = "$callback && $callback($json);"
