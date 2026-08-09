@@ -16,20 +16,23 @@ import java.util.concurrent.TimeUnit
  *   1) 访问 https://open.feishu.cn/app → 「开发者后台」→ 「创建企业自建应用」
  *   2) 在「凭证与基础信息」里拿到 App ID 和 App Secret
  *   3) 在「添加应用能力」里启用「机器人」
- *   4) 在「权限管理」里搜索 `im`，勾选 `im:message:send_as_bot`（以应用身份发消息）
- *      以及 `im:message`（读取消息），保险起见把 im: 开头的全勾上
+ *   4) 在「权限管理」里：
+ *      - 搜索 `im:message`，勾选 `im:message:send_as_bot`（以应用身份发消息）
+ *      - 搜索 `通过手机号或邮箱获取用户 ID`，勾选该权限（contact:user.id:readonly）
+ *        用于把用户的手机号自动转换为 open_id，免去用户手动复制 open_id
  *   5) 在「版本管理与发布」里创建版本并发布（企业版飞书需要管理员审批）
- *   6) 在手机飞书 App 里搜索应用名 → 进入应用会话 → 给机器人发一条消息（任意内容）
- *      这一步是必须的，否则拿不到你的 open_id
- *   7) 拿到 open_id 后，把 App ID / App Secret / Open ID 三个值填到 App 设置页
+ *   6) 在 App 设置页填入 App ID / App Secret，再填入用户飞书账号绑定的手机号，
+ *      点「点击绑定 Open ID」按钮，App 自动通过手机号查出 open_id 并保存。
  *
  * 工作原理：
  *   - 用 App ID + App Secret 换 tenant_access_token（2h 过期，本类内部缓存，提前 5 分钟刷新）
+ *   - 用 tenant_access_token 调用 /contact/v3/users/batch_get_id 把手机号转成 open_id
  *   - 用 tenant_access_token 调用 /im/v1/messages?receive_id_type=open_id 发交互式卡片
  *
  * 相比群机器人 Webhook 的优势：
  *   - 不需要建群，机器人直接给你私聊发消息
  *   - 不需要安全设置关键词白名单，签名校验由 App Secret 完成
+ *   - 不需要用户去飞书后台找 open_id，用手机号即可自动绑定
  *
  * 注意：飞书个人版不能创建自建应用，必须是企业版飞书（免费版企业也行，但需要管理员开通开发者后台）
  */
@@ -44,6 +47,10 @@ class FeishuAppNotifier {
             "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
         private const val URL_SEND_MESSAGE =
             "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+        // 通过手机号/邮箱查询用户的 open_id（免手动复制 open_id）
+        // POST 请求体：{"mobiles":["13xxxxxxxxx"]} ；返回 data.user_list[].user_id（即 open_id，ou_ 开头）
+        private const val URL_BATCH_GET_ID =
+            "https://open.feishu.cn/open-apis/contact/v3/users/batch_get_id?user_id_type=open_id"
 
         // token 缓存：飞书返回的 expire 单位是秒，默认 7200（2h）
         // 提前 5 分钟刷新，避免边界过期
@@ -166,6 +173,80 @@ class FeishuAppNotifier {
             }
         }.getOrElse { "❌ 异常：${it.message}" }
     }
+
+    /**
+     * 自动绑定：通过用户手机号查询对应的飞书 open_id，免去手动复制 open_id。
+     *
+     * 用户只需要在 App 设置页填入飞书账号绑定的手机号，点「点击绑定 Open ID」按钮，
+     * 本方法会调用飞书 /contact/v3/users/batch_get_id 接口，自动把手机号转换成 open_id。
+     *
+     * 前置条件：应用必须勾选「通过手机号或邮箱获取用户 ID」权限
+     * （contact:user.id:readonly），并在「应用可用范围」里把目标用户加入可用范围。
+     *
+     * @param mobile  用户飞书账号绑定的手机号，11 位国内手机号直接传，海外需带 +国家码
+     * @return 成功返回 open_id（ou_ 开头），失败返回 null + 错误信息（通过 Log）
+     */
+    fun fetchOpenIdByMobile(appId: String, appSecret: String, mobile: String): FetchResult {
+        return runCatching {
+            val token = getToken(appId, appSecret)
+                ?: return@runCatching FetchResult(null, "获取 tenant_access_token 失败，请检查 App ID / App Secret")
+            val payload = JSONObject()
+                .put("mobiles", JSONArray().put(mobile.trim()))
+                .toString()
+            val req = Request.Builder()
+                .url(URL_BATCH_GET_ID)
+                .header("Authorization", "Bearer $token")
+                .post(payload.toRequestBody(JSON_MEDIA))
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val respText = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    Log.w(TAG, "fetchOpenIdByMobile: HTTP ${resp.code} body=$respText")
+                    return@use FetchResult(null, "HTTP 错误 ${resp.code}")
+                }
+                val json = runCatching { JSONObject(respText) }.getOrNull()
+                val code = json?.optInt("code", -1)
+                if (code != 0) {
+                    val msg = json?.optString("msg") ?: respText
+                    Log.w(TAG, "fetchOpenIdByMobile: 飞书返回错误 code=$code msg=$msg")
+                    // token 失效，清缓存
+                    if (code == 99991663 || code == 99991664 || code == 99991661) {
+                        synchronized(tokenLock) {
+                            cachedToken = null
+                            tokenExpireAt = 0L
+                        }
+                    }
+                    // 权限不足：需要勾选 contact:user.id:readonly 权限
+                    val hint = when (code) {
+                        99991672, 99991661 ->
+                            "，请到飞书开放平台 → 应用 → 权限管理，搜索「通过手机号或邮箱获取用户 ID」并勾选后重新发布"
+                        230002, 230013 ->
+                            "，请到飞书开放平台 → 应用 → 应用可用范围，把目标用户加入可用范围后重新发布"
+                        else -> ""
+                    }
+                    return@use FetchResult(null, "飞书返回错误 code=$code msg=$msg$hint")
+                }
+                val userList = json?.optJSONObject("data")?.optJSONArray("user_list")
+                    ?: return@use FetchResult(null, "未找到用户列表，请确认手机号是否正确")
+                if (userList.length() == 0) {
+                    return@use FetchResult(null, "手机号 $mobile 未找到对应飞书用户，请确认是否为飞书账号绑定手机号")
+                }
+                // user_list[0].user_id 即 open_id（因为我们请求时 user_id_type=open_id）
+                val userId = userList.optJSONObject(0)?.optString("user_id").orEmpty()
+                if (userId.startsWith("ou_")) {
+                    Log.i(TAG, "fetchOpenIdByMobile: 找到 open_id=${userId.take(20)}… (手机号=${mobile.take(3)}***${mobile.takeLast(4)})")
+                    return@use FetchResult(userId, null)
+                }
+                FetchResult(null, "查询到的 user_id 格式异常：$userId")
+            }
+        }.getOrElse { e ->
+            Log.e(TAG, "fetchOpenIdByMobile: 异常", e)
+            FetchResult(null, "异常：${e.message}")
+        }
+    }
+
+    /** fetchOpenIdByMobile 的返回值 */
+    data class FetchResult(val openId: String?, val errorMsg: String?)
 
     // ===== 内部：token 缓存与刷新 =====
 

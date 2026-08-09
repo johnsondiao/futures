@@ -149,19 +149,25 @@
       </div>
 
       <div class="input-row">
-        <label for="setFeishuOpenId" class="input-label">接收者 Open ID</label>
+        <label for="setFeishuMobile" class="input-label">飞书账号绑定的手机号</label>
         <input
-          type="text"
-          id="setFeishuOpenId"
+          type="tel"
+          id="setFeishuMobile"
           class="text-input"
           autocomplete="off"
           spellcheck="false"
-          placeholder="ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+          inputmode="numeric"
+          placeholder="11 位手机号，例如 13800138000"
         />
         <small class="input-hint">
-          先发布应用，再在手机飞书里搜应用名 → 进入会话 → 给机器人发一条消息（任意内容）。
-          然后去飞书开放平台 → 应用 → 「事件与回调」或后台日志里可以看到消息事件中的 user_id / open_id（以 ou_ 开头）。
+          填入你飞书账号绑定的手机号（<strong>不是</strong>接收短信的手机号，是登录飞书用的手机号）。
+          海外账号需加 <code>+</code> 国家码，例如 <code>+85212345678</code>。
         </small>
+      </div>
+
+      <button type="button" id="btnBindFeishuOpenId" class="ghost-btn" disabled>点击绑定 Open ID</button>
+      <div id="openIdStatus" class="input-hint" style="margin-top:8px;">
+        填入手机号后点上方按钮，App 会自动通过飞书接口查询对应的 open_id 并保存，<strong>无需手动复制 open_id</strong>。
       </div>
 
       <div class="btn-row">
@@ -173,9 +179,9 @@
         接入步骤：<br/>
         1) 访问 <code>open.feishu.cn/app</code> → 创建企业自建应用<br/>
         2) 「添加应用能力」里启用「机器人」<br/>
-        3) 「权限管理」搜索 <code>im</code>，勾选 <code>im:message:send_as_bot</code> 等相关权限<br/>
-        4) 「版本管理与发布」里发布版本<br/>
-        5) 手机飞书搜索应用名，给机器人发一条消息，拿到 open_id 填到上面<br/>
+        3) 「权限管理」搜索并勾选：<code>im:message:send_as_bot</code>（发消息）、<code>通过手机号或邮箱获取用户 ID</code>（自动绑定 Open ID）<br/>
+        4) 「版本管理与发布」里发布版本，并在「应用可用范围」里把自己加入可用范围<br/>
+        5) 在本页填 App ID / App Secret / 飞书手机号 → 点「点击绑定 Open ID」自动获取<br/>
         凭证保存在本机加密存储，不会上传。
       </p>
     </div>
