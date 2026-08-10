@@ -1,5 +1,7 @@
 name: Build Android APK
 
+# 触发条件：push 时只在 android/ 或本文件改动时触发；
+# workflow_dispatch 支持在 GitHub Actions 页面手动点 "Run workflow" 触发
 on:
   workflow_dispatch:
   push:
