@@ -233,7 +233,7 @@ class FeishuWsClient(private val listener: Listener) {
                 val text = resp.body?.string().orEmpty()
                 val json = runCatching { JSONObject(text) }.getOrNull()
                 val code = json?.optInt("code", -1) ?: -1
-                if (code != 0) {
+                if (json == null || code != 0) {
                     val msg = json?.optString("msg").orEmpty()
                     setState("飞书长连接获取失败 code=$code $msg")
                     Log.w(TAG, "fetchEndpoint: code=$code msg=$msg body=$text")
