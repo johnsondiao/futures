@@ -463,7 +463,6 @@ class MainActivity : AppCompatActivity() {
                 .put("feishu_app_id", prefs.getString("alert_feishu_app_id", "") ?: "")
                 .put("feishu_app_secret", prefs.getString("alert_feishu_app_secret", "") ?: "")
                 .put("feishu_open_id", prefs.getString("alert_feishu_open_id", "") ?: "")
-                .put("feishu_mobile", prefs.getString("alert_feishu_mobile", "") ?: "")
                 .toString()
         }
 
@@ -490,66 +489,11 @@ class MainActivity : AppCompatActivity() {
                         "alert_feishu_open_id",
                         o.optString("feishu_open_id", "").trim().ifBlank { null }
                     )
-                    .putString(
-                        "alert_feishu_mobile",
-                        o.optString("feishu_mobile", "").trim().ifBlank { null }
-                    )
                     .apply()
                 if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
                     mainHandler.post { ensureNotifyPermission() }
                 }
             } catch (_: Exception) {
-            }
-        }
-
-        /**
-         * 飞书 Open ID 自动绑定：通过用户填写的手机号查询对应的飞书 open_id，
-         * 成功后自动保存到 prefs，免去用户去飞书后台手动复制 open_id。
-         *
-         * 调用流程：前端点「点击绑定 Open ID」按钮 → 此方法在 io 线程执行 →
-         * 调用 FeishuAppNotifier.fetchOpenIdByMobile → 通过 JS 回调返回结果。
-         *
-         * @param appId     飞书自建应用 App ID
-         * @param appSecret 飞书自建应用 App Secret
-         * @param mobile    用户飞书账号绑定的手机号
-         * @param callback  JS 端回调函数名，回传 {openId, mobile, errorMsg} 对象
-         */
-        @JavascriptInterface
-        fun bindFeishuOpenId(appId: String, appSecret: String, mobile: String, callback: String) {
-            val missing = when {
-                appId.isBlank() -> "请先填写 App ID"
-                appSecret.isBlank() -> "请先填写 App Secret"
-                mobile.isBlank() -> "请先填写飞书账号绑定的手机号"
-                !mobile.trim().matches(Regex("^[+]?\\d{6,15}$")) ->
-                    "手机号格式不正确，请填写 11 位国内手机号（海外需加 +国家码）"
-                else -> null
-            }
-            if (missing != null) {
-                val json = JSONObject()
-                    .put("openId", JSONObject.NULL)
-                    .put("mobile", mobile)
-                    .put("errorMsg", missing)
-                val js = "$callback && $callback($json);"
-                mainHandler.post { webView.evaluateJavascript(js, null) }
-                return
-            }
-            io.execute {
-                val result = feishuNotifier.fetchOpenIdByMobile(
-                    appId.trim(), appSecret.trim(), mobile.trim()
-                )
-                // 成功则同时保存 open_id 和 mobile 到 prefs，下次打开设置页时直接显示已绑定
-                if (result.openId != null) {
-                    prefs.edit()
-                        .putString("alert_feishu_open_id", result.openId)
-                        .putString("alert_feishu_mobile", mobile.trim())
-                        .apply()
-                }
-                val json = JSONObject()
-                    .put("openId", result.openId ?: JSONObject.NULL)
-                    .put("mobile", mobile.trim())
-                    .put("errorMsg", result.errorMsg ?: JSONObject.NULL)
-                val js = "$callback && $callback($json);"
-                mainHandler.post { webView.evaluateJavascript(js, null) }
             }
         }
 
@@ -559,7 +503,7 @@ class MainActivity : AppCompatActivity() {
             val missing = when {
                 appId.isBlank() -> "请先填写 App ID"
                 appSecret.isBlank() -> "请先填写 App Secret"
-                openId.isBlank() -> "请先点击「绑定 Open ID」按钮完成自动绑定"
+                openId.isBlank() -> "请先填写 Open ID（ou_ 开头，获取方法见飞书配置引导）"
                 else -> null
             }
             if (missing != null) {

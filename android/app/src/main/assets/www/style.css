@@ -255,6 +255,67 @@ body.panel-open {
 }
 
 .guide-body { padding-bottom: 48px; }
+
+/* 设置页内的飞书配置引导折叠区块 */
+.guide-collapse {
+  background: #f8fafb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
+}
+.guide-collapse > summary {
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 650;
+  color: #00838f;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.guide-collapse > summary::before {
+  content: "▶";
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+.guide-collapse[open] > summary::before {
+  transform: rotate(90deg);
+}
+.guide-collapse > summary::-webkit-details-marker { display: none; }
+.guide-steps-box {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--line);
+}
+.guide-steps-box h4 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+}
+.guide-steps-box p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #334;
+}
+.guide-steps-box small {
+  color: var(--muted);
+}
+.json-block {
+  background: #1e293b;
+  color: #a7f3d0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-x: auto;
+  margin: 6px 0;
+  -webkit-overflow-scrolling: touch;
+}
 .guide-block {
   background: #fff;
   border: 1px solid var(--line);

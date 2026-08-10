@@ -149,25 +149,18 @@
       </div>
 
       <div class="input-row">
-        <label for="setFeishuMobile" class="input-label">飞书账号绑定的手机号</label>
+        <label for="setFeishuOpenId" class="input-label">接收者 Open ID</label>
         <input
-          type="tel"
-          id="setFeishuMobile"
+          type="text"
+          id="setFeishuOpenId"
           class="text-input"
           autocomplete="off"
           spellcheck="false"
-          inputmode="numeric"
-          placeholder="11 位手机号，例如 13800138000"
+          placeholder="ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         />
         <small class="input-hint">
-          填入你飞书账号绑定的手机号（<strong>不是</strong>接收短信的手机号，是登录飞书用的手机号）。
-          海外账号需加 <code>+</code> 国家码，例如 <code>+85212345678</code>。
+          以 <code>ou_</code> 开头。获取方法见下方「飞书配置引导」，或到飞书开放平台 → 应用 → 事件与回调里查看消息事件中的 user_id。
         </small>
-      </div>
-
-      <button type="button" id="btnBindFeishuOpenId" class="ghost-btn" disabled>点击绑定 Open ID</button>
-      <div id="openIdStatus" class="input-hint" style="margin-top:8px;">
-        填入手机号后点上方按钮，App 会自动通过飞书接口查询对应的 open_id 并保存，<strong>无需手动复制 open_id</strong>。
       </div>
 
       <div class="btn-row">
@@ -175,14 +168,50 @@
         <button type="button" id="btnTestFeishu" class="ghost-btn">测试飞书推送</button>
       </div>
 
+      <details class="guide-collapse" style="margin-top:18px;">
+        <summary>飞书配置引导（点开查看详细步骤）</summary>
+        <div class="guide-steps-box">
+          <h4>第 1 步：创建飞书自建应用</h4>
+          <p>用手机或电脑浏览器打开 <code>open.feishu.cn/app</code>，登录飞书账号，点击「创建企业自建应用」，填应用名称（随意，比如"信号推送"）。</p>
+
+          <h4>第 2 步：拿到 App ID 和 App Secret</h4>
+          <p>应用创建后，在左侧菜单「凭证与基础信息」里可以看到 <strong>App ID</strong>（cli_ 开头）和 <strong>App Secret</strong>，复制后填到上方对应输入框。</p>
+
+          <h4>第 3 步：启用机器人能力</h4>
+          <p>左侧菜单「添加应用能力」→ 找到「机器人」→ 点击「添加」启用机器人能力。</p>
+
+          <h4>第 4 步：配置权限（一键导入）</h4>
+          <p>左侧「权限管理」→ 点击「批量导入/导出权限」→ 粘贴下方 JSON → 确认导入：</p>
+          <pre class="json-block" id="feishuPermsJson">{
+  "scopes": {
+    "tenant": [
+      "im:message:send_as_bot",
+      "im:message",
+      "im:message:readonly",
+      "im:message.p2p_msg:readonly",
+      "im:resource"
+    ]
+  }
+}</pre>
+          <button type="button" id="btnCopyPermsJson" class="link-btn">复制权限 JSON</button>
+
+          <h4>第 5 步：发布应用</h4>
+          <p>左侧「版本管理与发布」→「创建版本」→ 填版本号（如 1.0.0）→ 提交审核 → 发布。<br/>
+          <small>企业版飞书需要管理员审批；个人开发者版可直接发布。</small></p>
+
+          <h4>第 6 步：获取你的 Open ID</h4>
+          <p>发布后，在手机飞书 App 里搜索你刚创建的应用名 → 进入应用会话 → 给机器人发一条任意消息。</p>
+          <p>然后回到飞书开放平台 → 你的应用 → 左侧「事件与回调」→「事件配置」→ 启用「使用长连接接收事件」→ 添加事件 <code>im.message.receive_v1</code>（接收消息）→ 保存。</p>
+          <p>再次在手机飞书给机器人发一条消息，然后到「事件与回调」页面下方的事件日志里，找到最近的消息事件，里面的 <code>user_id</code> 字段就是你的 <strong>Open ID</strong>（<code>ou_</code> 开头），复制填到上方。</p>
+
+          <h4>第 7 步：测试</h4>
+          <p>回到本页，点「测试飞书推送」，手机飞书应该收到机器人私聊消息。</p>
+        </div>
+      </details>
+
       <p class="panel-note">
-        接入步骤：<br/>
-        1) 访问 <code>open.feishu.cn/app</code> → 创建企业自建应用<br/>
-        2) 「添加应用能力」里启用「机器人」<br/>
-        3) 「权限管理」搜索并勾选：<code>im:message:send_as_bot</code>（发消息）、<code>通过手机号或邮箱获取用户 ID</code>（自动绑定 Open ID）<br/>
-        4) 「版本管理与发布」里发布版本，并在「应用可用范围」里把自己加入可用范围<br/>
-        5) 在本页填 App ID / App Secret / 飞书手机号 → 点「点击绑定 Open ID」自动获取<br/>
-        凭证保存在本机加密存储，不会上传。
+        凭证保存在本机加密存储，不会上传。<br/>
+        飞书推送用于兜底防漏：即使手机静音、锁屏、App 在后台，只要网络正常，飞书机器人依然能把信号私聊发给你。
       </p>
     </div>
   </div>

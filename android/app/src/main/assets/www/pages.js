@@ -9,7 +9,6 @@
     feishu_app_id: "",
     feishu_app_secret: "",
     feishu_open_id: "",
-    feishu_mobile: "",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -68,31 +67,12 @@
     const fieldMap = {
       setFeishuAppId: "feishu_app_id",
       setFeishuAppSecret: "feishu_app_secret",
-      setFeishuMobile: "feishu_mobile",
+      setFeishuOpenId: "feishu_open_id",
     };
     for (const id of Object.keys(fieldMap)) {
       const el = document.getElementById(id);
       if (el && document.activeElement !== el) {
         el.value = alertSettings[fieldMap[id]] || "";
-      }
-    }
-
-    // 绑定状态显示：已绑定时显示 open_id 前 16 位，未绑定时显示初始提示
-    const statusEl = document.getElementById("openIdStatus");
-    const bindBtn = document.getElementById("btnBindFeishuOpenId");
-    if (statusEl) {
-      const oid = alertSettings.feishu_open_id || "";
-      if (oid && oid.startsWith("ou_")) {
-        statusEl.innerHTML =
-          '✅ <strong>已绑定</strong> Open ID：<code>' +
-          oid.slice(0, 16) + '…</code>（手机号 ' +
-          (alertSettings.feishu_mobile || "").replace(/(\d{3})\d+(\d{4})/, "$1****$2") +
-          '）';
-        statusEl.style.color = "#0f8a4b";
-      } else {
-        statusEl.innerHTML =
-          '填入手机号后点上方按钮，App 会自动通过飞书接口查询对应的 open_id 并保存，<strong>无需手动复制 open_id</strong>。';
-        statusEl.style.color = "";
       }
     }
 
@@ -108,18 +88,15 @@
       if (el) el.disabled = !masterOn;
     }
     const feishuOn = masterOn && !!alertSettings.feishu_enabled;
-    for (const id of ["setFeishuAppId", "setFeishuAppSecret", "setFeishuMobile"]) {
+    for (const id of ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"]) {
       const el = document.getElementById(id);
       if (el) el.disabled = !feishuOn;
     }
-    if (bindBtn) bindBtn.disabled = !feishuOn;
     const testBtn = document.getElementById("btnTestFeishu");
     if (testBtn) testBtn.disabled = !feishuOn;
   }
 
   function readSettingsFromUi() {
-    // 保留 open_id（由「点击绑定」按钮自动写入，不在 UI 上直接编辑）
-    const prevOpenId = alertSettings.feishu_open_id || "";
     alertSettings = {
       enabled: !!(document.getElementById("setAlertEnabled") || {}).checked,
       sound: !!(document.getElementById("setAlertSound") || {}).checked,
@@ -131,9 +108,8 @@
         (document.getElementById("setFeishuAppId") || {}).value?.trim() || "",
       feishu_app_secret:
         (document.getElementById("setFeishuAppSecret") || {}).value?.trim() || "",
-      feishu_open_id: prevOpenId,
-      feishu_mobile:
-        (document.getElementById("setFeishuMobile") || {}).value?.trim() || "",
+      feishu_open_id:
+        (document.getElementById("setFeishuOpenId") || {}).value?.trim() || "",
     };
     pushNative();
     paintSettings();
@@ -158,6 +134,10 @@
     if (!panel) return;
     panel.hidden = false;
     document.body.classList.add("panel-open");
+    // 禁用原生下拉刷新，避免 SwipeRefreshLayout 拦截面板内的向上滑动手势
+    if (window.ChannelBridge && window.ChannelBridge.setSwipeEnabled) {
+      try { window.ChannelBridge.setSwipeEnabled(false); } catch (_) {}
+    }
     if (!openStack.includes(id)) openStack.push(id);
     if (id === "panelSettings") {
       syncFromNative();
@@ -170,7 +150,13 @@
     if (panel) panel.hidden = true;
     const i = openStack.lastIndexOf(id);
     if (i >= 0) openStack.splice(i, 1);
-    if (!openStack.length) document.body.classList.remove("panel-open");
+    if (!openStack.length) {
+      document.body.classList.remove("panel-open");
+      // 面板全部关闭后恢复下拉刷新
+      if (window.ChannelBridge && window.ChannelBridge.setSwipeEnabled) {
+        try { window.ChannelBridge.setSwipeEnabled(true); } catch (_) {}
+      }
+    }
   }
 
   function closeTopPanel() {
@@ -219,7 +205,7 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", readSettingsFromUi);
     });
-    ["setFeishuAppId", "setFeishuAppSecret", "setFeishuMobile"].forEach(bindInputWithDebounce);
+    ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"].forEach(bindInputWithDebounce);
 
     const testBtn = document.getElementById("btnTestAlert");
     if (testBtn) {
@@ -244,61 +230,34 @@
       });
     }
 
-    const feishuBindBtn = document.getElementById("btnBindFeishuOpenId");
-    if (feishuBindBtn) {
-      feishuBindBtn.addEventListener("click", () => {
-        readSettingsFromUi();
-        const appId = alertSettings.feishu_app_id;
-        const appSecret = alertSettings.feishu_app_secret;
-        const mobile = alertSettings.feishu_mobile;
-        if (!appId || !appSecret) {
-          showFeishuResult("请先填写 App ID 和 App Secret", false);
-          return;
-        }
-        if (!mobile) {
-          showFeishuResult("请先填写飞书账号绑定的手机号", false);
-          return;
-        }
-        if (!(window.ChannelBridge && window.ChannelBridge.bindFeishuOpenId)) {
-          showFeishuResult("当前版本不支持自动绑定，请更新 App", false);
-          return;
-        }
-        feishuBindBtn.disabled = true;
-        const oldLabel = feishuBindBtn.textContent;
-        feishuBindBtn.textContent = "绑定中…";
-        const cbName =
-          "__feishu_bind_cb_" + Math.random().toString(36).slice(2) + "_" + Date.now();
-        window[cbName] = function (o) {
-          try {
-            delete window[cbName];
-          } catch (_) {
-            window[cbName] = undefined;
-          }
-          feishuBindBtn.disabled = false;
-          feishuBindBtn.textContent = oldLabel;
-          if (o && o.openId) {
-            // 自动绑定成功：写入 settings 并刷新状态显示
-            alertSettings.feishu_open_id = o.openId;
-            if (o.mobile) alertSettings.feishu_mobile = o.mobile;
-            pushNative();
-            paintSettings();
-            showFeishuResult(
-              "✅ Open ID 绑定成功：" + String(o.openId).slice(0, 16) + "…",
-              true
-            );
-          } else {
-            const msg = (o && o.errorMsg) || "绑定失败，请检查手机号或权限配置";
-            showFeishuResult("❌ " + msg, false);
-          }
-        };
-        try {
-          window.ChannelBridge.bindFeishuOpenId(appId, appSecret, mobile, cbName);
-        } catch (e) {
-          feishuBindBtn.disabled = false;
-          feishuBindBtn.textContent = oldLabel;
-          showFeishuResult("调用失败：" + (e.message || e), false);
+    // 复制权限 JSON 按钮（飞书配置引导用）
+    const copyPermsBtn = document.getElementById("btnCopyPermsJson");
+    if (copyPermsBtn) {
+      copyPermsBtn.addEventListener("click", () => {
+        const jsonEl = document.getElementById("feishuPermsJson");
+        if (!jsonEl) return;
+        const text = jsonEl.textContent;
+        const oldLabel = copyPermsBtn.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => {
+            copyPermsBtn.textContent = "✅ 已复制";
+            setTimeout(() => { copyPermsBtn.textContent = oldLabel; }, 1500);
+          }).catch(() => fallbackCopy(text, copyPermsBtn, oldLabel));
+        } else {
+          fallbackCopy(text, copyPermsBtn, oldLabel);
         }
       });
+    }
+    function fallbackCopy(text, btn, oldLabel) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); btn.textContent = "✅ 已复制"; } catch (_) {}
+      document.body.removeChild(ta);
+      setTimeout(() => { btn.textContent = oldLabel; }, 1500);
     }
 
     const feishuTestBtn = document.getElementById("btnTestFeishu");
@@ -308,12 +267,8 @@
         const appId = alertSettings.feishu_app_id;
         const appSecret = alertSettings.feishu_app_secret;
         const openId = alertSettings.feishu_open_id;
-        if (!appId || !appSecret) {
-          showFeishuResult("请先填写 App ID 和 App Secret", false);
-          return;
-        }
-        if (!openId) {
-          showFeishuResult("请先点击「绑定 Open ID」按钮完成自动绑定", false);
+        if (!appId || !appSecret || !openId) {
+          showFeishuResult("请先完整填写 App ID / App Secret / Open ID 三个字段", false);
           return;
         }
         if (!(window.ChannelBridge && window.ChannelBridge.testFeishuPush)) {
