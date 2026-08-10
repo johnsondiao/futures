@@ -106,7 +106,25 @@ class FeishuWsClient(private val listener: Listener) {
     /** 分片重组缓存：message_id → 各分片（OkHttp 回调串行，无需加锁） */
     private val fragmentCache = HashMap<String, Array<ByteArray?>>()
 
+    // ===== 诊断计数：用于判断「飞书没推事件」还是「App 没正确处理」 =====
+    @Volatile private var framesReceived = 0
+    @Volatile private var lastFrameDesc = "无"
+    @Volatile private var eventsReceived = 0
+    @Volatile private var lastEventAt = 0L
+
     fun statusText(): String = state
+
+    /** 诊断信息：连接状态 + 收帧统计 + 事件统计 */
+    fun diagnosis(): String {
+        val sb = StringBuilder()
+        sb.append("连接: ").append(state)
+        sb.append("；收帧: ").append(framesReceived).append("(最近:").append(lastFrameDesc).append(")")
+        sb.append("；事件: ").append(eventsReceived)
+        if (lastEventAt > 0) {
+            sb.append("(").append((System.currentTimeMillis() - lastEventAt) / 1000).append("s前)")
+        }
+        return sb.toString()
+    }
 
     /** 启动（凭证变化时自动重启；相同凭证重复调用无副作用） */
     fun start(appId: String, appSecret: String) {
@@ -291,9 +309,12 @@ class FeishuWsClient(private val listener: Listener) {
             Log.w(TAG, "handleFrame: protobuf 解码失败", e)
             return
         }
+        framesReceived++
         when (frame.method) {
             METHOD_CONTROL -> {
-                when (frame.header("type")) {
+                val type = frame.header("type")
+                lastFrameDesc = "控制帧/${type ?: "?"}"
+                when (type) {
                     TYPE_PONG -> {
                         // pong 可能携带新的 ClientConfig
                         if (frame.payload.isNotEmpty()) {
@@ -304,6 +325,7 @@ class FeishuWsClient(private val listener: Listener) {
                 }
             }
             METHOD_DATA -> {
+                lastFrameDesc = "数据帧/${frame.header("type") ?: "?"}"
                 // 先 ACK 再处理，避免超过飞书 3s 处理时限触发重推
                 ack(frame)
                 val type = frame.header("type") ?: return
@@ -339,21 +361,36 @@ class FeishuWsClient(private val listener: Listener) {
         return joined.toByteArray()
     }
 
-    /** v2.0 事件结构：{ schema, header:{event_type,...}, event:{sender,message} } */
+    /** v2.0 事件结构：{ schema, header:{event_type,...}, event:{sender,message} }；兼容 v1.0 event_callback */
     private fun handleEvent(payload: ByteArray) {
         val json = runCatching { JSONObject(String(payload, Charsets.UTF_8)) }.getOrNull() ?: return
-        val eventType = json.optJSONObject("header")?.optString("event_type").orEmpty()
-        Log.d(TAG, "handleEvent: event_type=$eventType")
+        val header = json.optJSONObject("header")
+        val eventType = header?.optString("event_type").orEmpty()
+        Log.i(TAG, "handleEvent: event_type=$eventType")
+        if (eventType.isEmpty()) {
+            // v1.0 事件结构兑底：{type:event_callback, event:{type:message, open_id:...}}
+            if (json.optString("type") == "event_callback") {
+                val ev = json.optJSONObject("event")
+                if (ev != null && ev.optString("type") == "message") {
+                    eventsReceived++
+                    lastEventAt = System.currentTimeMillis()
+                    val oid = ev.optString("open_id")
+                    if (oid.isNotBlank()) listener.onOpenIdDiscovered(oid)
+                }
+            }
+            return
+        }
         if (eventType != EVENT_MESSAGE_RECEIVE) return
+        eventsReceived++
+        lastEventAt = System.currentTimeMillis()
         val event = json.optJSONObject("event") ?: return
         val sender = event.optJSONObject("sender") ?: return
-        // 只认用户私聊消息，忽略机器人自身/群聊
-        if (sender.optString("sender_type") != "user") return
-        val chatType = event.optJSONObject("message")?.optString("chat_type").orEmpty()
-        if (chatType != "p2p") return
+        // 忽略机器人自身消息；用户消息无论私聊/群聊都可用于配对（个人机器人场景）
+        val senderType = sender.optString("sender_type")
+        if (senderType.isNotEmpty() && senderType != "user") return
         val openId = sender.optJSONObject("sender_id")?.optString("open_id").orEmpty()
         if (openId.isBlank()) return
-        Log.i(TAG, "handleEvent: 发现私聊用户 open_id=${openId.take(12)}…")
+        Log.i(TAG, "handleEvent: 发现用户 open_id=${openId.take(12)}…")
         listener.onOpenIdDiscovered(openId)
     }
 

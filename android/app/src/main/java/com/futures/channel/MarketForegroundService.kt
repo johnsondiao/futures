@@ -104,6 +104,8 @@ class MarketForegroundService : Service() {
 
         override fun onStateChanged(state: String) {
             Log.d(TAG, "feishuWs: $state")
+            // 持久化状态：设置页在 Service 未绑定时也能展示最近状态
+            runCatching { prefs.edit().putString("feishu_ws_state", state).apply() }
         }
     }
     private val feishuWs by lazy { FeishuWsClient(feishuWsListener) }
@@ -260,6 +262,9 @@ class MarketForegroundService : Service() {
 
     /** 飞书长连接状态（设置页展示用） */
     fun feishuWsStatus(): String = feishuWs.statusText()
+
+    /** 飞书长连接诊断：连接状态 + 收帧/事件统计，用于定位「飞书没推」还是「App 没认」 */
+    fun feishuDiagnosis(): String = feishuWs.diagnosis()
 
     // ===== 内部 =====
 

@@ -463,7 +463,13 @@ class MainActivity : AppCompatActivity() {
                 .put("feishu_app_id", prefs.getString("alert_feishu_app_id", "") ?: "")
                 .put("feishu_app_secret", prefs.getString("alert_feishu_app_secret", "") ?: "")
                 .put("feishu_open_id", prefs.getString("alert_feishu_open_id", "") ?: "")
-                .put("feishu_state", service?.feishuWsStatus() ?: "")
+                .put(
+                    "feishu_state",
+                    service?.feishuWsStatus()
+                        ?: prefs.getString("feishu_ws_state", "")
+                        ?: ""
+                )
+                .put("feishu_diag", service?.feishuDiagnosis() ?: "")
                 .toString()
         }
 
@@ -510,7 +516,8 @@ class MainActivity : AppCompatActivity() {
             val missing = when {
                 appId.isBlank() -> "请先填写 App ID"
                 appSecret.isBlank() -> "请先填写 App Secret"
-                oid.isBlank() -> "尚未配对：请在飞书里找到你的机器人应用，给它发一条任意消息，App 会自动获取接收者（无需手填 Open ID）"
+                oid.isBlank() -> "尚未配对：请在飞书里给你的机器人发一条任意消息（无需手填 Open ID）。\n诊断：" +
+                    (service?.feishuDiagnosis() ?: "行情服务未连接")
                 else -> null
             }
             if (missing != null) {
@@ -541,6 +548,8 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // 前台时恢复向 WebView 推送 bars（Service 的 detector 始终运行）
         service?.setListener(activityListener)
+        // 兑底：若上次保存设置时 Service 尚未绑定导致长连接未启动，这里补一次（同凭证无副作用）
+        service?.resyncFeishu()
     }
 
     override fun onPause() {

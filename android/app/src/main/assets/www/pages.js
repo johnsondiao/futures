@@ -140,10 +140,11 @@
     }
     box.hidden = false;
     box.className = "alert-toast feishu " + (ok ? "ok" : "bad");
+    box.style.whiteSpace = "pre-line";
     box.textContent = msg;
     setTimeout(() => {
       box.hidden = true;
-    }, ok ? 4000 : 6000);
+    }, ok ? 4000 : 9000);
   }
 
   function openPanel(id) {
