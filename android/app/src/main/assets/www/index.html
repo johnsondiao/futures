@@ -149,17 +149,9 @@
       </div>
 
       <div class="input-row">
-        <label for="setFeishuOpenId" class="input-label">接收者 Open ID</label>
-        <input
-          type="text"
-          id="setFeishuOpenId"
-          class="text-input"
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="ou_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-        />
-        <small class="input-hint">
-          以 <code>ou_</code> 开头。获取方法见下方「飞书配置引导」，或到飞书开放平台 → 应用 → 事件与回调里查看消息事件中的 user_id。
+        <label class="input-label">接收者配对状态</label>
+        <small id="feishuPairStatus" class="input-hint">
+          无需手填 Open ID：填好 App ID / App Secret 后，在手机飞书里给机器人发一条消息即可自动配对。
         </small>
       </div>
 
@@ -195,16 +187,20 @@
 }</pre>
           <button type="button" id="btnCopyPermsJson" class="link-btn">复制权限 JSON</button>
 
-          <h4>第 5 步：发布应用</h4>
+          <h4>第 5 步：配置事件订阅（长连接模式，关键步骤）</h4>
+          <p>左侧「事件与回调」→「事件配置」→ 订阅方式选择<strong>「使用长连接接收事件」</strong>并保存。</p>
+          <p>然后点击「添加事件」→ 搜索 <code>接收消息</code>（im.message.receive_v1）→ 确认添加。</p>
+          <p><small>长连接模式无需公网 IP，App 会主动连接飞书网关；这也是只需填 App ID / App Secret 两个凭证的原因。</small></p>
+
+          <h4>第 6 步：发布应用</h4>
           <p>左侧「版本管理与发布」→「创建版本」→ 填版本号（如 1.0.0）→ 提交审核 → 发布。<br/>
           <small>企业版飞书需要管理员审批；个人开发者版可直接发布。</small></p>
 
-          <h4>第 6 步：获取你的 Open ID</h4>
-          <p>发布后，在手机飞书 App 里搜索你刚创建的应用名 → 进入应用会话 → 给机器人发一条任意消息。</p>
-          <p>然后回到飞书开放平台 → 你的应用 → 左侧「事件与回调」→「事件配置」→ 启用「使用长连接接收事件」→ 添加事件 <code>im.message.receive_v1</code>（接收消息）→ 保存。</p>
-          <p>再次在手机飞书给机器人发一条消息，然后到「事件与回调」页面下方的事件日志里，找到最近的消息事件，里面的 <code>user_id</code> 字段就是你的 <strong>Open ID</strong>（<code>ou_</code> 开头），复制填到上方。</p>
+          <h4>第 7 步：自动配对（无需手填 Open ID）</h4>
+          <p>发布后，在手机飞书 App 里搜索你刚创建的应用名 → 进入应用会话 → <strong>给机器人发一条任意消息</strong>。</p>
+          <p>App 后台长连接会立即收到这条消息并自动记住你的身份（Open ID），上方「接收者配对状态」会变为已配对，机器人还会回一条「配对成功」确认消息。</p>
 
-          <h4>第 7 步：测试</h4>
+          <h4>第 8 步：测试</h4>
           <p>回到本页，点「测试飞书推送」，手机飞书应该收到机器人私聊消息。</p>
         </div>
       </details>

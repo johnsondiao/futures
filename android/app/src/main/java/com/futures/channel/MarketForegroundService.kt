@@ -80,6 +80,34 @@ class MarketForegroundService : Service() {
     private val detector by lazy { ChannelSignalDetector() }
     private val feishu by lazy { FeishuAppNotifier() }
 
+    /**
+     * 飞书长连接客户端：只用 App ID + App Secret 建 WebSocket 长连接，
+     * 用户在飞书里给机器人发私信时自动拿到其 open_id 并持久化，无需手填。
+     */
+    private val feishuWsListener = object : FeishuWsClient.Listener {
+        override fun onOpenIdDiscovered(openId: String) {
+            val old = prefs.getString("alert_feishu_open_id", null)
+            if (old == openId) return
+            prefs.edit().putString("alert_feishu_open_id", openId).apply()
+            Log.i(TAG, "feishuWs: 自动配对成功 open_id=${openId.take(12)}…")
+            mainHandler.post { onStatusInternal("飞书机器人配对成功，推送已就绪") }
+            // 机器人回一条配对回执，用户能立即确认链路通了
+            val appId = prefs.getString("alert_feishu_app_id", null)
+            val secret = prefs.getString("alert_feishu_app_secret", null)
+            if (!appId.isNullOrBlank() && !secret.isNullOrBlank()) {
+                feishu.sendText(
+                    appId.trim(), secret.trim(), openId,
+                    "配对成功 ✅\n之后出现开多/开空信号时，我会在这里第一时间推送给你。"
+                )
+            }
+        }
+
+        override fun onStateChanged(state: String) {
+            Log.d(TAG, "feishuWs: $state")
+        }
+    }
+    private val feishuWs by lazy { FeishuWsClient(feishuWsListener) }
+
     @Volatile private var listener: Listener? = null
     private var mdClient: DiffMdClient? = null
     private var session: ShinnyAuth.Session? = null
@@ -146,6 +174,7 @@ class MarketForegroundService : Service() {
         registerHeartbeatAlarmReceiver()
         registerNetworkCallback()
         scheduleNextHeartbeatAlarm()
+        resyncFeishu()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -189,6 +218,7 @@ class MarketForegroundService : Service() {
         cancelHeartbeatAlarm()
         unregisterHeartbeatAlarmReceiver()
         unregisterNetworkCallback()
+        feishuWs.stop()
         mdClient?.destroy()
         mdClient = null
         if (wakeLock.isHeld) {
@@ -212,6 +242,24 @@ class MarketForegroundService : Service() {
     fun setListener(l: Listener?) {
         listener = l
     }
+
+    /**
+     * 按当前设置启动/停止飞书长连接（设置保存后由 MainActivity 调用）。
+     * 只要填了 App ID + App Secret 就保持长连接，用于自动配对 open_id。
+     */
+    fun resyncFeishu() {
+        val enabled = prefs.getBoolean("alert_feishu_enabled", true)
+        val appId = prefs.getString("alert_feishu_app_id", null)
+        val secret = prefs.getString("alert_feishu_app_secret", null)
+        if (enabled && !appId.isNullOrBlank() && !secret.isNullOrBlank()) {
+            feishuWs.start(appId.trim(), secret.trim())
+        } else {
+            feishuWs.stop()
+        }
+    }
+
+    /** 飞书长连接状态（设置页展示用） */
+    fun feishuWsStatus(): String = feishuWs.statusText()
 
     // ===== 内部 =====
 

@@ -128,6 +128,40 @@ class FeishuAppNotifier {
     }
 
     /**
+     * 发送一条纯文本私信（用于长连接配对成功回执等轻量场景），失败只记录日志。
+     */
+    fun sendText(appId: String, appSecret: String, openId: String, text: String) {
+        Thread {
+            try {
+                val token = getToken(appId, appSecret) ?: run {
+                    Log.w(TAG, "sendText: 获取 token 失败，跳过")
+                    return@Thread
+                }
+                val payload = JSONObject()
+                    .put("receive_id", openId.trim())
+                    .put("msg_type", "text")
+                    .put("content", JSONObject().put("text", text).toString())
+                val req = Request.Builder()
+                    .url(URL_SEND_MESSAGE)
+                    .header("Authorization", "Bearer $token")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA))
+                    .build()
+                client.newCall(req).execute().use { resp ->
+                    val respText = resp.body?.string().orEmpty()
+                    val json = runCatching { JSONObject(respText) }.getOrNull()
+                    if (json?.optInt("code", -1) == 0) {
+                        Log.d(TAG, "sendText: 发送成功")
+                    } else {
+                        Log.w(TAG, "sendText: 飞书返回错误 code=${json?.optInt("code")} msg=${json?.optString("msg")}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "sendText: 发送失败", e)
+            }
+        }.start()
+    }
+
+    /**
      * 用于设置页「测试推送」按钮：同步调用，直接返回结果信息给 UI 展示。
      */
     fun test(appId: String, appSecret: String, openId: String): String {

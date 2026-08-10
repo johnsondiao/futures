@@ -463,6 +463,7 @@ class MainActivity : AppCompatActivity() {
                 .put("feishu_app_id", prefs.getString("alert_feishu_app_id", "") ?: "")
                 .put("feishu_app_secret", prefs.getString("alert_feishu_app_secret", "") ?: "")
                 .put("feishu_open_id", prefs.getString("alert_feishu_open_id", "") ?: "")
+                .put("feishu_state", service?.feishuWsStatus() ?: "")
                 .toString()
         }
 
@@ -493,17 +494,23 @@ class MainActivity : AppCompatActivity() {
                 if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
                     mainHandler.post { ensureNotifyPermission() }
                 }
+                // 飞书凭证变化后同步长连接（启动/停止/重连）
+                mainHandler.post { service?.resyncFeishu() }
             } catch (_: Exception) {
             }
         }
 
-        /** 飞书测试推送：在 io 线程执行，通过 JS 回调把结果字符串返回给 UI */
+        /** 飞书测试推送：在 io 线程执行，通过 JS 回调把结果字符串返回给 UI。
+         *  openId 可为空：长连接配对成功后已自动保存，此处会从本机兼容读取。 */
         @JavascriptInterface
         fun testFeishuPush(appId: String, appSecret: String, openId: String, callback: String) {
+            val oid = openId.trim().ifBlank {
+                prefs.getString("alert_feishu_open_id", null)?.trim().orEmpty()
+            }
             val missing = when {
                 appId.isBlank() -> "请先填写 App ID"
                 appSecret.isBlank() -> "请先填写 App Secret"
-                openId.isBlank() -> "请先填写 Open ID（ou_ 开头，获取方法见飞书配置引导）"
+                oid.isBlank() -> "尚未配对：请在飞书里找到你的机器人应用，给它发一条任意消息，App 会自动获取接收者（无需手填 Open ID）"
                 else -> null
             }
             if (missing != null) {
@@ -513,7 +520,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             io.execute {
-                val result = feishuNotifier.test(appId.trim(), appSecret.trim(), openId.trim())
+                val result = feishuNotifier.test(appId.trim(), appSecret.trim(), oid)
                 val ok = result.startsWith("✅")
                 val json = JSONObject().put("ok", ok).put("msg", result)
                 val js = "$callback && $callback($json);"

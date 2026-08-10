@@ -9,6 +9,7 @@
     feishu_app_id: "",
     feishu_app_secret: "",
     feishu_open_id: "",
+    feishu_state: "",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -67,7 +68,6 @@
     const fieldMap = {
       setFeishuAppId: "feishu_app_id",
       setFeishuAppSecret: "feishu_app_secret",
-      setFeishuOpenId: "feishu_open_id",
     };
     for (const id of Object.keys(fieldMap)) {
       const el = document.getElementById(id);
@@ -88,12 +88,29 @@
       if (el) el.disabled = !masterOn;
     }
     const feishuOn = masterOn && !!alertSettings.feishu_enabled;
-    for (const id of ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"]) {
+    for (const id of ["setFeishuAppId", "setFeishuAppSecret"]) {
       const el = document.getElementById(id);
       if (el) el.disabled = !feishuOn;
     }
     const testBtn = document.getElementById("btnTestFeishu");
     if (testBtn) testBtn.disabled = !feishuOn;
+    // 配对状态展示：长连接自动获取 open_id，无需手填
+    const st = document.getElementById("feishuPairStatus");
+    if (st) {
+      const oid = alertSettings.feishu_open_id || "";
+      const wsState = alertSettings.feishu_state || "";
+      if (!feishuOn) {
+        st.textContent = "飞书推送已关闭";
+      } else if (oid) {
+        st.textContent =
+          "✅ 已配对（" + oid.slice(0, 14) + "…）" +
+          (wsState ? " · 长连接：" + wsState : "");
+      } else {
+        st.textContent =
+          "尚未配对：请在手机飞书里搜索你的机器人应用名，给它发一条任意消息即可自动获取" +
+          (wsState ? "（长连接：" + wsState + "）" : "");
+      }
+    }
   }
 
   function readSettingsFromUi() {
@@ -108,8 +125,8 @@
         (document.getElementById("setFeishuAppId") || {}).value?.trim() || "",
       feishu_app_secret:
         (document.getElementById("setFeishuAppSecret") || {}).value?.trim() || "",
-      feishu_open_id:
-        (document.getElementById("setFeishuOpenId") || {}).value?.trim() || "",
+      // open_id 由长连接自动配对写入，UI 不再手填，保留本机已有值
+      feishu_open_id: alertSettings.feishu_open_id || "",
     };
     pushNative();
     paintSettings();
@@ -205,7 +222,7 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", readSettingsFromUi);
     });
-    ["setFeishuAppId", "setFeishuAppSecret", "setFeishuOpenId"].forEach(bindInputWithDebounce);
+    ["setFeishuAppId", "setFeishuAppSecret"].forEach(bindInputWithDebounce);
 
     const testBtn = document.getElementById("btnTestAlert");
     if (testBtn) {
@@ -266,9 +283,9 @@
         readSettingsFromUi();
         const appId = alertSettings.feishu_app_id;
         const appSecret = alertSettings.feishu_app_secret;
-        const openId = alertSettings.feishu_open_id;
-        if (!appId || !appSecret || !openId) {
-          showFeishuResult("请先完整填写 App ID / App Secret / Open ID 三个字段", false);
+        const openId = alertSettings.feishu_open_id || "";
+        if (!appId || !appSecret) {
+          showFeishuResult("请先填写 App ID 和 App Secret", false);
           return;
         }
         if (!(window.ChannelBridge && window.ChannelBridge.testFeishuPush)) {
