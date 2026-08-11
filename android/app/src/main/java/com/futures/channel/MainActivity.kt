@@ -535,6 +535,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        /** 自动发现接收者（不依赖事件订阅）：查机器人所在会话，拿 oc_ 会话 ID 直接绑定 */
+        @JavascriptInterface
+        fun feishuDiscoverChat(appId: String, appSecret: String, callback: String) {
+            fun reply(msg: String, ok: Boolean) {
+                val json = JSONObject().put("ok", ok).put("msg", msg)
+                val js = "$callback && $callback($json);"
+                mainHandler.post { webView.evaluateJavascript(js, null) }
+            }
+            if (appId.isBlank() || appSecret.isBlank()) {
+                reply("请先填写 App ID 和 App Secret", false)
+                return
+            }
+            io.execute {
+                val (chatId, desc) = feishuNotifier.discoverChat(appId.trim(), appSecret.trim())
+                if (chatId != null) {
+                    prefs.edit().putString("alert_feishu_open_id", chatId).apply()
+                    // 发一条确认消息验证推送链路
+                    feishuNotifier.sendText(
+                        appId.trim(), appSecret.trim(), chatId,
+                        "接收者发现成功 ✅\n之后出现开多/开空信号时，我会推送到这个会话。"
+                    )
+                    reply("✅ 已绑定 $desc\n已发送确认消息，请到飞书查看；之后也可点「测试飞书推送」验证", true)
+                } else {
+                    reply(desc, false)
+                }
+            }
+        }
+
         /** 手指在 K 线区域操作时关闭下拉刷新，避免和拖图抢手势 */
         @JavascriptInterface
         fun setSwipeEnabled(enabled: Boolean) {

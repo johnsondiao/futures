@@ -94,6 +94,8 @@
     }
     const testBtn = document.getElementById("btnTestFeishu");
     if (testBtn) testBtn.disabled = !feishuOn;
+    const discoverBtn = document.getElementById("btnFeishuDiscover");
+    if (discoverBtn) discoverBtn.disabled = !feishuOn;
     // 配对状态展示：长连接自动获取 open_id，无需手填
     const st = document.getElementById("feishuPairStatus");
     if (st) {
@@ -107,7 +109,7 @@
           (wsState ? " · 长连接：" + wsState : "");
       } else {
         st.textContent =
-          "尚未配对：请在手机飞书里搜索你的机器人应用名，给它发一条任意消息即可自动获取" +
+          "尚未配对：点「自动发现接收者」直接绑定；或在手机飞书里给机器人发一条任意消息自动获取" +
           (wsState ? "（长连接：" + wsState + "）" : "");
       }
     }
@@ -313,6 +315,47 @@
         } catch (e) {
           feishuTestBtn.disabled = false;
           feishuTestBtn.textContent = oldLabel;
+          showFeishuResult("调用失败：" + (e.message || e), false);
+        }
+      });
+    }
+
+    // 自动发现接收者：不依赖事件订阅，通过飞书 API 查机器人所在会话拿 oc_ 会话 ID
+    const feishuDiscoverBtn = document.getElementById("btnFeishuDiscover");
+    if (feishuDiscoverBtn) {
+      feishuDiscoverBtn.addEventListener("click", () => {
+        readSettingsFromUi();
+        const appId = alertSettings.feishu_app_id;
+        const appSecret = alertSettings.feishu_app_secret;
+        if (!appId || !appSecret) {
+          showFeishuResult("请先填写 App ID 和 App Secret", false);
+          return;
+        }
+        if (!(window.ChannelBridge && window.ChannelBridge.feishuDiscoverChat)) {
+          showFeishuResult("当前版本不支持自动发现，请更新 App", false);
+          return;
+        }
+        feishuDiscoverBtn.disabled = true;
+        const oldLabel = feishuDiscoverBtn.textContent;
+        feishuDiscoverBtn.textContent = "发现中…";
+        const cbName =
+          "__feishu_dc_" + Math.random().toString(36).slice(2) + "_" + Date.now();
+        window[cbName] = function (o) {
+          try {
+            delete window[cbName];
+          } catch (_) {
+            window[cbName] = undefined;
+          }
+          feishuDiscoverBtn.disabled = false;
+          feishuDiscoverBtn.textContent = oldLabel;
+          showFeishuResult(o?.msg || "未知结果", !!o?.ok);
+          if (o?.ok) syncFromNative(); // 刷新配对状态展示
+        };
+        try {
+          window.ChannelBridge.feishuDiscoverChat(appId, appSecret, cbName);
+        } catch (e) {
+          feishuDiscoverBtn.disabled = false;
+          feishuDiscoverBtn.textContent = oldLabel;
           showFeishuResult("调用失败：" + (e.message || e), false);
         }
       });

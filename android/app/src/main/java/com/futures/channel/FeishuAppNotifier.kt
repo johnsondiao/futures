@@ -40,8 +40,16 @@ class FeishuAppNotifier {
         // 飞书开放平台 API 端点
         private const val URL_TOKEN =
             "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
-        private const val URL_SEND_MESSAGE =
+        private const val URL_SEND_OPEN_ID =
             "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+        private const val URL_SEND_CHAT_ID =
+            "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
+        private const val URL_LIST_CHATS =
+            "https://open.feishu.cn/open-apis/im/v1/chats?page_size=50"
+
+        /** 接收者前缀自适应：ou_=用户 open_id，oc_=会话 chat_id（与 hermes 同路径） */
+        private fun sendUrl(receiveId: String): String =
+            if (receiveId.startsWith("oc_")) URL_SEND_CHAT_ID else URL_SEND_OPEN_ID
 
         // token 缓存：飞书返回的 expire 单位是秒，默认 7200（2h）
         // 提前 5 分钟刷新，避免边界过期
@@ -92,7 +100,7 @@ class FeishuAppNotifier {
                     .put("msg_type", "interactive")
                     .put("content", cardJson.toString())
                 val req = Request.Builder()
-                    .url(URL_SEND_MESSAGE)
+                    .url(sendUrl(openId.trim()))
                     .header("Authorization", "Bearer $token")
                     .post(payload.toString().toRequestBody(JSON_MEDIA))
                     .build()
@@ -142,7 +150,7 @@ class FeishuAppNotifier {
                     .put("msg_type", "text")
                     .put("content", JSONObject().put("text", text).toString())
                 val req = Request.Builder()
-                    .url(URL_SEND_MESSAGE)
+                    .url(sendUrl(openId.trim()))
                     .header("Authorization", "Bearer $token")
                     .post(payload.toString().toRequestBody(JSON_MEDIA))
                     .build()
@@ -184,7 +192,7 @@ class FeishuAppNotifier {
                 .put("msg_type", "interactive")
                 .put("content", cardJson.toString())
             val req = Request.Builder()
-                .url(URL_SEND_MESSAGE)
+                .url(sendUrl(openId.trim()))
                 .header("Authorization", "Bearer $token")
                 .post(payload.toString().toRequestBody(JSON_MEDIA))
                 .build()
@@ -197,6 +205,54 @@ class FeishuAppNotifier {
                 else "飞书返回错误 code=$code msg=${json?.optString("msg") ?: respText}"
             }
         }.getOrElse { "❌ 异常：${it.message}" }
+    }
+
+    /**
+     * 主动发现接收者（不依赖事件订阅）：查询机器人所在会话列表，选一个作为推送目标。
+     * 优先私聊会话（chat_mode=p2p），否则取第一个群。需要 im:chat:readonly 权限。
+     * 同步调用，需在 IO 线程；返回 (chatId 或 null, 可读结果描述)。
+     */
+    fun discoverChat(appId: String, appSecret: String): Pair<String?, String> {
+        return runCatching {
+            val token = getToken(appId, appSecret)
+                ?: return@runCatching (null to "❌ 获取 token 失败，请检查 App ID / App Secret")
+            val req = Request.Builder()
+                .url(URL_LIST_CHATS)
+                .header("Authorization", "Bearer $token")
+                .get()
+                .build()
+            client.newCall(req).execute().use { resp ->
+                val respText = resp.body?.string().orEmpty()
+                val json = runCatching { JSONObject(respText) }.getOrNull()
+                val code = json?.optInt("code", -1) ?: -1
+                if (json == null || code != 0) {
+                    val msg = json?.optString("msg").orEmpty()
+                    Log.w(TAG, "discoverChat: code=$code msg=$msg")
+                    return@runCatching (null to "❌ 飞书返回 code=$code $msg\n若是权限错误：到飞书后台添加 im:chat:readonly 权限并发布新版本")
+                }
+                val items = json.optJSONObject("data")?.optJSONArray("items")
+                if (items == null || items.length() == 0) {
+                    return@runCatching (null to "未找到机器人所在的会话：请先在手机飞书里打开机器人会话页（不用发消息），或建一个只有你和机器人的群，再点一次")
+                }
+                // 优先私聊会话，否则取第一个群
+                var pick: JSONObject? = null
+                for (i in 0 until items.length()) {
+                    val it = items.optJSONObject(i) ?: continue
+                    if (it.optString("chat_mode") == "p2p") {
+                        pick = it
+                        break
+                    }
+                }
+                if (pick == null) pick = items.optJSONObject(0)
+                val chatId = pick?.optString("chat_id").orEmpty()
+                val name = pick?.optString("name").orEmpty().ifBlank { "机器人与你的会话" }
+                if (chatId.isBlank()) {
+                    return@runCatching (null to "❌ 会话列表里没有 chat_id，请重试")
+                }
+                Log.i(TAG, "discoverChat: 选中会话 $chatId name=$name 共${items.length()}个")
+                chatId to "会话「$name」（${chatId.take(12)}…）"
+            }
+        }.getOrElse { null to "❌ 异常：${it.message}" }
     }
 
     // ===== 内部：token 缓存与刷新 =====
