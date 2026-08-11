@@ -283,6 +283,7 @@
     const feishuTestBtn = document.getElementById("btnTestFeishu");
     if (feishuTestBtn) {
       feishuTestBtn.addEventListener("click", () => {
+        syncFromNative(); // 先取最新配对结果，避免用旧状态覆盖已保存的 open_id
         readSettingsFromUi();
         const appId = alertSettings.feishu_app_id;
         const appSecret = alertSettings.feishu_app_secret;
@@ -324,6 +325,7 @@
     const feishuDiscoverBtn = document.getElementById("btnFeishuDiscover");
     if (feishuDiscoverBtn) {
       feishuDiscoverBtn.addEventListener("click", () => {
+        syncFromNative(); // 先取最新配对结果，避免用旧状态覆盖已保存的 open_id
         readSettingsFromUi();
         const appId = alertSettings.feishu_app_id;
         const appSecret = alertSettings.feishu_app_secret;

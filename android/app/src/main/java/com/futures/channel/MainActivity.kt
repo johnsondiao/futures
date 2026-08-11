@@ -477,7 +477,7 @@ class MainActivity : AppCompatActivity() {
         fun setAlertSettings(json: String) {
             try {
                 val o = JSONObject(json)
-                prefs.edit()
+                val editor = prefs.edit()
                     .putBoolean("alert_enabled", o.optBoolean("enabled", true))
                     .putBoolean("alert_sound", o.optBoolean("sound", true))
                     .putBoolean("alert_vibrate", o.optBoolean("vibrate", true))
@@ -492,11 +492,12 @@ class MainActivity : AppCompatActivity() {
                         "alert_feishu_app_secret",
                         o.optString("feishu_app_secret", "").trim().ifBlank { null }
                     )
-                    .putString(
-                        "alert_feishu_open_id",
-                        o.optString("feishu_open_id", "").trim().ifBlank { null }
-                    )
-                    .apply()
+                // open_id 由长连接配对/自动发现写入：UI 传空值时绝不能清掉已配对结果
+                val oid = o.optString("feishu_open_id", "").trim()
+                if (oid.isNotBlank()) {
+                    editor.putString("alert_feishu_open_id", oid)
+                }
+                editor.apply()
                 if (o.optBoolean("enabled", true) && o.optBoolean("notification", true)) {
                     mainHandler.post { ensureNotifyPermission() }
                 }
