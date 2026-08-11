@@ -107,6 +107,8 @@ class FeishuWsClient(private val listener: Listener) {
     private val fragmentCache = HashMap<String, Array<ByteArray?>>()
 
     // ===== 诊断计数：用于判断「飞书没推事件」还是「App 没正确处理」 =====
+    @Volatile private var rawMessages = 0
+    @Volatile private var decodeErrors = 0
     @Volatile private var framesReceived = 0
     @Volatile private var lastFrameDesc = "无"
     @Volatile private var eventsReceived = 0
@@ -118,7 +120,10 @@ class FeishuWsClient(private val listener: Listener) {
     fun diagnosis(): String {
         val sb = StringBuilder()
         sb.append("连接: ").append(state)
-        sb.append("；收帧: ").append(framesReceived).append("(最近:").append(lastFrameDesc).append(")")
+        sb.append("；svc=").append(serviceId)
+        sb.append("；帧: ").append(framesReceived)
+            .append("(原始").append(rawMessages).append("/解码失败").append(decodeErrors).append(")")
+            .append("(最近:").append(lastFrameDesc).append(")")
         sb.append("；事件: ").append(eventsReceived)
         if (lastEventAt > 0) {
             sb.append("(").append((System.currentTimeMillis() - lastEventAt) / 1000).append("s前)")
@@ -208,7 +213,15 @@ class FeishuWsClient(private val listener: Listener) {
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
+                rawMessages++
                 handleFrame(bytes.toByteArray())
+            }
+
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                // 飞书长连接正常只发二进制帧，收到文本帧也计入诊断
+                rawMessages++
+                lastFrameDesc = "文本帧(${text.take(20)})"
+                Log.w(TAG, "ws 收到意外的文本帧: ${text.take(100)}")
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -306,7 +319,9 @@ class FeishuWsClient(private val listener: Listener) {
         val frame = try {
             PbCodec.decode(bytes)
         } catch (e: Exception) {
-            Log.w(TAG, "handleFrame: protobuf 解码失败", e)
+            decodeErrors++
+            lastFrameDesc = "解码失败(${bytes.size}B)"
+            Log.w(TAG, "handleFrame: protobuf 解码失败 len=${bytes.size}", e)
             return
         }
         framesReceived++
