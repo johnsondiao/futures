@@ -470,6 +470,7 @@ class MainActivity : AppCompatActivity() {
                         ?: ""
                 )
                 .put("feishu_diag", service?.feishuDiagnosis() ?: "")
+                .put("strategy", prefs.getString("strategy_profile", "5m") ?: "5m")
                 .toString()
         }
 
@@ -484,6 +485,11 @@ class MainActivity : AppCompatActivity() {
                     .putBoolean("alert_notification", o.optBoolean("notification", true))
                     .putBoolean("alert_toast", o.optBoolean("toast", true))
                     .putBoolean("alert_feishu_enabled", o.optBoolean("feishu_enabled", true))
+                    // 策略选择：只接受 5m/60m，默认 5m
+                    .putString(
+                        "strategy_profile",
+                        if (o.optString("strategy") == "60m") "60m" else "5m"
+                    )
                     .putString(
                         "alert_feishu_app_id",
                         o.optString("feishu_app_id", "").trim().ifBlank { null }
@@ -503,6 +509,8 @@ class MainActivity : AppCompatActivity() {
                 }
                 // 飞书凭证变化后同步长连接（启动/停止/重连）
                 mainHandler.post { service?.resyncFeishu() }
+                // 策略选择变化后重建信号检测器
+                mainHandler.post { service?.resyncStrategy() }
             } catch (_: Exception) {
             }
         }

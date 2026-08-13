@@ -69,6 +69,17 @@
       <h2>设置</h2>
     </div>
     <div class="panel-body">
+      <h3 class="panel-section-title">策略选择</h3>
+      <p class="panel-desc">选择要运行的策略，选择会自动记住。盘面标记、条件单卡片与信号提醒都跟随所选策略。</p>
+      <div class="seg-row">
+        <button type="button" id="btnStrategy5m" class="seg-btn active">5 分钟策略</button>
+        <button type="button" id="btnStrategy60m" class="seg-btn">60 分钟策略</button>
+      </div>
+      <small class="input-hint">
+        5m：通道N60 · CCI(15)/4 · 止盈 1.5/3/5×ATR，信号多、需快速执行；
+        60m：通道N60 · CCI(15)/3 · 止盈 0.8/1.5/2.5×ATR，信号少、单笔空间大，迟到 1~2 小时仍可执行。
+      </small>
+
       <h3 class="panel-section-title">开仓信号提醒</h3>
       <p class="panel-desc">当 K 线新出现「开多 / 开空」标记时提醒。首次加载历史信号不会打扰。</p>
 

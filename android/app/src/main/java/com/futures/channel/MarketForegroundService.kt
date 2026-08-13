@@ -77,8 +77,38 @@ class MarketForegroundService : Service() {
     private val io = Executors.newSingleThreadExecutor()
 
     private val notifier by lazy { OpenSignalNotifier(this) }
-    private val detector by lazy { ChannelSignalDetector() }
+    /** 惰性持有（需等 prefs 就绪）；策略切换时整体替换。@Volatile：main 线程写、io 线程读 */
+    @Volatile private var detectorRef: ChannelSignalDetector? = null
+    private val detector: ChannelSignalDetector
+        get() = detectorRef ?: makeDetector().also { detectorRef = it }
     private val feishu by lazy { FeishuAppNotifier() }
+
+    /** 按持久化的策略档案创建信号检测器（与 src/config.py STRATEGY_PROFILES 一致） */
+    private fun makeDetector(): ChannelSignalDetector {
+        return if (currentStrategy() == "60m") {
+            ChannelSignalDetector(
+                channelN = 60, cciP = 15, cciM = 3,
+                period = ChannelSignalDetector.PERIOD_60M,
+                atrN = 20, tpMults = doubleArrayOf(0.8, 1.5, 2.5),
+            )
+        } else {
+            ChannelSignalDetector()
+        }
+    }
+
+    private fun currentStrategy(): String =
+        prefs.getString("strategy_profile", "5m") ?: "5m"
+
+    /** 设置保存后由 MainActivity 调用：策略切换时重建检测器（去重基线随之重置） */
+    fun resyncStrategy() {
+        val profile = currentStrategy()
+        if (detector.period != profile) {
+            detectorRef = makeDetector()
+            val label = if (profile == "60m") "60 分钟策略" else "5 分钟策略"
+            Log.i(TAG, "resyncStrategy: 已切换到 $label")
+            mainHandler.post { onStatusInternal("已切换到 $label") }
+        }
+    }
 
     /**
      * 飞书长连接客户端：只用 App ID + App Secret 建 WebSocket 长连接，
@@ -327,7 +357,9 @@ class MarketForegroundService : Service() {
                 "secretSet=${!feishuAppSecret.isNullOrBlank()} openIdSet=${!feishuOpenId.isNullOrBlank()}"
         )
         val label = if (sig.kind == "long") "开多" else "开空"
-        val body = "DCE.a2609 K线出现「${label}」标记 · ${sig.barTime}"
+        // 周期文案取自信号本身（而非当前 detector），避免切换策略瞬间标错
+        val periodLabel = if (sig.period == ChannelSignalDetector.PERIOD_60M) "60分钟" else "5分钟"
+        val body = "DCE.a2609 ${periodLabel}K线出现「${label}」标记 · ${sig.barTime}"
         val posted = notifier.notifyOpen(
             kind = sig.kind,
             title = "${label}信号",
@@ -351,12 +383,18 @@ class MarketForegroundService : Service() {
                     kind = sig.kind,
                     title = "${label}信号",
                     body = body,
-                    extraLines = listOf(
-                        "信号时间: ${sig.barTime}",
-                        "合约: DCE.a2609 (豆二 2609)",
-                        "周期: 5分钟 K线",
-                        "来源: 通道突破策略"
-                    )
+                    extraLines = buildList {
+                        add("信号时间: ${sig.barTime}")
+                        add("合约: DCE.a2609 (豆二 2609)")
+                        add("周期: ${periodLabel} K线")
+                        if (sig.entry.isFinite()) {
+                            add("参考开仓: ${String.format("%.0f", sig.entry)}")
+                            if (sig.tp1.isFinite()) add("止盈1: ${String.format("%.0f", sig.tp1)}")
+                            if (sig.tp2.isFinite()) add("止盈2: ${String.format("%.0f", sig.tp2)}")
+                            if (sig.tp3.isFinite()) add("止盈3: ${String.format("%.0f", sig.tp3)}")
+                        }
+                        add("来源: 通道突破策略")
+                    }
                 )
             }
         }

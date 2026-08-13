@@ -210,6 +210,28 @@ body.panel-open {
   margin-top: 18px;
 }
 
+/* 策略选择分段按钮 */
+.seg-row {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0 6px;
+}
+.seg-btn {
+  flex: 1;
+  border: 1.5px solid #00838f;
+  border-radius: 12px;
+  padding: 10px 0;
+  background: #fff;
+  color: #00838f;
+  font-size: 15px;
+  font-weight: 600;
+}
+.seg-btn.active {
+  background: #00838f;
+  color: #fff;
+}
+.seg-btn:active { opacity: 0.8; }
+
 .input-row {
   margin-top: 14px;
   padding: 12px 14px;

@@ -793,7 +793,8 @@
       window.CHANNEL_CFG.symbol = meta.symbol;
     }
     try {
-      const payload = window.ChannelStrategy.buildPayload(bars, 300);
+      const profile = window.CHANNEL_STRATEGY || "5m";
+      const payload = window.ChannelStrategy.buildPayload(bars, 300, profile);
       if (meta && meta.source) payload.source = meta.source;
       applyPayload(payload);
     } catch (e) {
@@ -801,6 +802,11 @@
       if (el.meta) el.meta.textContent = "策略计算失败";
     }
   }
+
+  /** 切换策略时重置开仓标记去重基线，避免新旧周期 key 混淆 */
+  window.__resetOpenKeys = function () {
+    seenOpenKeys = null;
+  };
 
   function onMdStatus(text) {
     if (el.meta) el.meta.textContent = text || "";

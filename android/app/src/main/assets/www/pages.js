@@ -10,6 +10,7 @@
     feishu_app_secret: "",
     feishu_open_id: "",
     feishu_state: "",
+    strategy: "5m",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -40,6 +41,7 @@
       alertSettings = { ...DEFAULT_ALERT, ...o };
       saveLocal();
       paintSettings();
+      applyStrategyGlobal();
     } catch (_) {}
   }
 
@@ -96,6 +98,12 @@
     if (testBtn) testBtn.disabled = !feishuOn;
     const discoverBtn = document.getElementById("btnFeishuDiscover");
     if (discoverBtn) discoverBtn.disabled = !feishuOn;
+    // 策略选择高亮
+    const s5 = document.getElementById("btnStrategy5m");
+    const s60 = document.getElementById("btnStrategy60m");
+    const cur = alertSettings.strategy === "60m" ? "60m" : "5m";
+    if (s5) s5.classList.toggle("active", cur === "5m");
+    if (s60) s60.classList.toggle("active", cur === "60m");
     // 配对状态展示：长连接自动获取 open_id，无需手填
     const st = document.getElementById("feishuPairStatus");
     if (st) {
@@ -129,6 +137,8 @@
         (document.getElementById("setFeishuAppSecret") || {}).value?.trim() || "",
       // open_id 由长连接自动配对写入，UI 不再手填，保留本机已有值
       feishu_open_id: alertSettings.feishu_open_id || "",
+      // 策略选择由分段按钮控制，保留当前值
+      strategy: alertSettings.strategy === "60m" ? "60m" : "5m",
     };
     pushNative();
     paintSettings();
@@ -189,6 +199,23 @@
     return { ...alertSettings };
   }
 
+  /** 同步当前策略到全局（app.js 渲染时读取） */
+  function applyStrategyGlobal() {
+    window.CHANNEL_STRATEGY = alertSettings.strategy === "60m" ? "60m" : "5m";
+  }
+
+  /** 切换策略：保存设置（原生持久化）+ 重置前端信号去重基线 */
+  function setStrategy(p) {
+    if (alertSettings.strategy === p) return;
+    alertSettings.strategy = p;
+    applyStrategyGlobal();
+    if (window.__resetOpenKeys) {
+      try { window.__resetOpenKeys(); } catch (_) {}
+    }
+    pushNative();
+    paintSettings();
+  }
+
   function bindInputWithDebounce(id) {
     const el = document.getElementById(id);
     if (!el) return;
@@ -204,11 +231,17 @@
     loadLocal();
     paintSettings();
     syncFromNative();
+    applyStrategyGlobal();
 
     const btnGuide = document.getElementById("btnGuide");
     const btnSettings = document.getElementById("btnSettings");
     if (btnGuide) btnGuide.addEventListener("click", () => openPanel("panelGuide"));
     if (btnSettings) btnSettings.addEventListener("click", () => openPanel("panelSettings"));
+
+    const btnS5 = document.getElementById("btnStrategy5m");
+    const btnS60 = document.getElementById("btnStrategy60m");
+    if (btnS5) btnS5.addEventListener("click", () => setStrategy("5m"));
+    if (btnS60) btnS60.addEventListener("click", () => setStrategy("60m"));
 
     document.querySelectorAll("[data-close]").forEach((btn) => {
       btn.addEventListener("click", () => closePanel(btn.getAttribute("data-close")));

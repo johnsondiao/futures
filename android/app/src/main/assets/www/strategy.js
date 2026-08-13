@@ -147,12 +147,60 @@
     return out;
   }
 
+  /**
+   * 策略档案：与 PC 端 src/config.py 的 STRATEGY_PROFILES 保持一致。
+   * 5m：信号多、单笔边际小，需快速执行；60m：信号少、单笔空间大，适合手动下单。
+   */
+  const STRATEGY_PROFILES = {
+    "5m": {
+      period: "5m", minutes: 5,
+      channel_n: 60, cci_p: 15, cci_m: 4, atr_n: 20,
+      tp_mults: [1.5, 3.0, 5.0],
+    },
+    "60m": {
+      period: "60m", minutes: 60,
+      channel_n: 60, cci_p: 15, cci_m: 3, atr_n: 20,
+      tp_mults: [0.8, 1.5, 2.5],
+    },
+  };
+
+  function normSec(t) {
+    return t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
+  }
+
+  /**
+   * 把 5m bars 聚合为 N 分钟 bars（按整点分桶：北京时间 UTC+8 整点对齐 epoch 小时边界）。
+   * 与天勤 60m K 线的整点对齐规则一致（交易小节休息不跨桶）。
+   */
+  function aggregateMinutes(bars, minutes) {
+    const span = minutes * 60;
+    const out = [];
+    let cur = null;
+    for (let i = 0; i < bars.length; i++) {
+      const b = bars[i];
+      const t = normSec(+b.time);
+      if (!isNum(t)) continue;
+      const bucket = Math.floor(t / span) * span;
+      if (!cur || cur.time !== bucket) {
+        cur = { time: bucket, open: +b.open, high: +b.high, low: +b.low, close: +b.close };
+        out.push(cur);
+      } else {
+        cur.high = Math.max(cur.high, +b.high);
+        cur.low = Math.min(cur.low, +b.low);
+        cur.close = +b.close;
+      }
+    }
+    return out;
+  }
+
   function computeMainChart(bars, opts) {
     opts = opts || {};
     const channelN = opts.channel_n || 60;
     const cciP = opts.cci_p || 15;
     const cciM = opts.cci_m || 4;
     const atrN = opts.atr_n || 20;
+    const tpMults = opts.tp_mults || [1.5, 3.0, 5.0];
+    const m1 = tpMults[0], m2 = tpMults[1], m3 = tpMults[2];
     const n = bars.length;
     const o = bars.map((b) => +b.open);
     const h = bars.map((b) => +b.high);
@@ -236,12 +284,12 @@
       openLong.map((v, i) => v || openShort[i]),
       c
     );
-    const t1l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 1.5 * atr[i] : nan()));
-    const t2l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 3.0 * atr[i] : nan()));
-    const t3l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + 5.0 * atr[i] : nan()));
-    const t1s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 1.5 * atr[i] : nan()));
-    const t2s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 3.0 * atr[i] : nan()));
-    const t3s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - 5.0 * atr[i] : nan()));
+    const t1l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + m1 * atr[i] : nan()));
+    const t2l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + m2 * atr[i] : nan()));
+    const t3l = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e + m3 * atr[i] : nan()));
+    const t1s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - m1 * atr[i] : nan()));
+    const t2s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - m2 * atr[i] : nan()));
+    const t3s = entry.map((e, i) => (isNum(e) && isNum(atr[i]) ? e - m3 * atr[i] : nan()));
 
     const hit1l = existInWindow(
       c.map((cv, i) => isNum(t1l[i]) && cv >= t1l[i]),
@@ -316,9 +364,9 @@
         condEntry[i] = trigger[i];
         const sign = waitLong[i] ? 1 : -1;
         if (isNum(trigger[i]) && isNum(atr[i])) {
-          condTp1[i] = trigger[i] + sign * 1.5 * atr[i];
-          condTp2[i] = trigger[i] + sign * 3.0 * atr[i];
-          condTp3[i] = trigger[i] + sign * 5.0 * atr[i];
+          condTp1[i] = trigger[i] + sign * m1 * atr[i];
+          condTp2[i] = trigger[i] + sign * m2 * atr[i];
+          condTp3[i] = trigger[i] + sign * m3 * atr[i];
           condTp[i] = condTp1[i];
         }
       } else if (longLots[i] > 0) {
@@ -836,9 +884,26 @@
     };
   }
 
-  function buildPayload(bars, viewBars) {
+  function buildPayload(bars, viewBars, profileKey) {
     viewBars = viewBars || 300;
-    const ind = computeMainChart(bars);
+    const prof = STRATEGY_PROFILES[profileKey] || STRATEGY_PROFILES["5m"];
+    // 60m 策略：先把 5m 行情聚合成 60m K 线再计算（与原生检测器/回测同口径）
+    let useBars = bars;
+    if (prof.minutes > 5) {
+      useBars = aggregateMinutes(bars, prof.minutes);
+    }
+    const ind = computeMainChart(useBars, prof);
+    if (prof.minutes > 5 && bars.length && ind.open_long.length) {
+      // 最后一根聚合 K 线仍在进行中（未收盘确认）：屏蔽其开仓标记，
+      // 与原生检测器「收盘确认才响铃」的语义保持一致，避免盘中闪现/双响。
+      const lastT = normSec(+bars[bars.length - 1].time);
+      const liveBucket = Math.floor(lastT / (prof.minutes * 60)) * (prof.minutes * 60);
+      const li = ind.open_long.length - 1;
+      if (li >= 0 && ind.time[li] === liveBucket) {
+        ind.open_long[li] = false;
+        ind.open_short[li] = false;
+      }
+    }
     const status = lastBarStatus(ind);
     const analytics = analyzeSignal(ind);
     const start = Math.max(0, ind.close.length - viewBars);
@@ -875,7 +940,7 @@
     return {
       source: "device",
       symbol: (global.CHANNEL_CFG && global.CHANNEL_CFG.symbol) || "DCE.a2609",
-      period: "5m",
+      period: prof.period,
       status,
       analytics,
       bars: {
@@ -911,5 +976,6 @@
     lastBarStatus,
     analyzeSignal,
     buildPayload,
+    STRATEGY_PROFILES,
   };
 })(typeof window !== "undefined" ? window : globalThis);

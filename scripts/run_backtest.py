@@ -11,18 +11,10 @@ import backtrader as bt
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from src.config import (
-    ATR_PERIOD,
-    ATR_TP_MULTS,
-    CCI_ENTRY_MODE,
-    CCI_PERIOD,
-    CCI_SIGNAL_PERIOD,
-    CHANNEL_N,
-    ENTRY_LOTS,
-)
-from src.data.bt_feed import TIMEFRAME_MAP, make_data
-from src.data.tq_loader import fetch_klines, load_cache, save_cache
-from strategies.channel_trend import ChannelCciAtrStrategy
+from src.config import CHANNEL_N, STRATEGY_PROFILES  # noqa: E402
+from src.data.bt_feed import TIMEFRAME_MAP, make_data  # noqa: E402
+from src.data.tq_loader import fetch_klines, load_cache, save_cache  # noqa: E402
+from strategies.channel_trend import ChannelCciAtrStrategy  # noqa: E402
 
 
 def _trade_summary(trades) -> None:
@@ -45,7 +37,7 @@ def main():
     parser.add_argument("--period", default="5m", choices=["5m", "60m", "1d"])
     parser.add_argument("--bars", type=int, default=8000)
     parser.add_argument("--cash", type=float, default=1_000_000.0)
-    parser.add_argument("--mode", default=CCI_ENTRY_MODE, help="开仓模式")
+    parser.add_argument("--mode", default=None, help="开仓模式（缺省用该周期策略档案的默认值）")
     parser.add_argument("--printlog", action="store_true")
     args = parser.parse_args()
 
@@ -68,9 +60,14 @@ def main():
         raise SystemExit(f"数据过短: {len(df)} 根，通道 N={channel_n}")
 
     print(f"数据区间: {df.index[0]} → {df.index[-1]}  共 {len(df)} 根")
+    profile = dict(STRATEGY_PROFILES.get(period, STRATEGY_PROFILES["5m"]))
+    if args.mode:
+        profile["entry_mode"] = args.mode
     print(
-        f"通道 N={channel_n} | CCI({CCI_PERIOD})/SMA({CCI_SIGNAL_PERIOD}) | "
-        f"ATR({ATR_PERIOD}) x {ATR_TP_MULTS} | 开仓{ENTRY_LOTS}手 | mode={args.mode}"
+        f"策略档案[{period}]: 通道 N={profile['channel_period']} | "
+        f"CCI({profile['cci_period']})/SMA({profile['cci_signal']}) | "
+        f"ATR({profile['atr_period']}) x {list(profile['atr_mults'])} | "
+        f"开仓{profile['entry_lots']}手 | mode={profile['entry_mode']}"
     )
 
     tf, comp = TIMEFRAME_MAP[period]
@@ -80,9 +77,8 @@ def main():
     cerebro.adddata(data)
     cerebro.addstrategy(
         ChannelCciAtrStrategy,
-        channel_period=channel_n,
-        entry_mode=args.mode,
         printlog=args.printlog,
+        **profile,
     )
     cerebro.broker.setcash(args.cash)
     cerebro.broker.setcommission(commission=0.00015, mult=10.0)

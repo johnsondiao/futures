@@ -11,6 +11,11 @@ import kotlin.math.abs
  * 原生开仓信号检测器：与 [android/app/src/main/assets/www/strategy.js] 的
  * computeMainChart 中 open_long / open_short 判断对齐（通道 MA + CCI 金叉/死叉 + 窗口去重）。
  *
+ * 支持两个策略周期（与 src/config.py 的 STRATEGY_PROFILES 一致）：
+ *   - 5m：直接在 5m K 线上计算（同原有行为）
+ *   - 60m：先把 5m 行情按整点聚合成 60m K 线（丢弃未收盘桶，收盘确认才出信号），
+ *     并额外计算 ATR(20) 与三档止盈价，随推送附带参考价位。
+ *
  * 仅负责开仓标记检测与去重，不复现止盈/止损/挂单等全部策略——这些仍由前端 JS 在前台渲染。
  * 后台时 WebView JS 会被系统暂停，本类独立运行确保开仓提醒不漏。
  */
@@ -18,8 +23,21 @@ class ChannelSignalDetector(
     private val channelN: Int = 60,
     private val cciP: Int = 15,
     private val cciM: Int = 4,
+    val period: String = PERIOD_5M,
+    private val atrN: Int = 20,
+    private val tpMults: DoubleArray = doubleArrayOf(1.5, 3.0, 5.0),
 ) {
-    data class OpenSignal(val kind: String, val time: Long, val barTime: String)
+    data class OpenSignal(
+        val kind: String,
+        val time: Long,
+        val barTime: String,
+        val entry: Double = Double.NaN,
+        val tp1: Double = Double.NaN,
+        val tp2: Double = Double.NaN,
+        val tp3: Double = Double.NaN,
+        /** 信号产生时的策略周期（避免切换策略后通知文案标错） */
+        val period: String = PERIOD_5M,
+    )
 
     /** 已响过的开仓标记键："time|L" / "time|S"，与 app.js collectOpenKeys 一致。 */
     private val seenKeys = LinkedHashSet<String>()
@@ -34,22 +52,37 @@ class ChannelSignalDetector(
      * 返回本次新发现的开仓信号（已去重，历史信号不重复返回）。
      */
     fun detect(bars: JSONArray): List<OpenSignal> {
-        val n = bars.length()
-        if (n < channelN + cciP) {
-            Log.d(TAG, "detect: bars 数量 $n < ${channelN + cciP}，跳过")
-            return emptyList()
-        }
+        val rawN = bars.length()
+        if (rawN == 0) return emptyList()
 
-        val h = DoubleArray(n)
-        val l = DoubleArray(n)
-        val c = DoubleArray(n)
-        val t = LongArray(n)
-        for (i in 0 until n) {
+        var h = DoubleArray(rawN)
+        var l = DoubleArray(rawN)
+        var c = DoubleArray(rawN)
+        var t = LongArray(rawN)
+        for (i in 0 until rawN) {
             val bar = bars.getJSONObject(i)
             h[i] = bar.optDouble("high", Double.NaN)
             l[i] = bar.optDouble("low", Double.NaN)
             c[i] = bar.optDouble("close", Double.NaN)
             t[i] = bar.optLong("time", 0L)
+        }
+
+        // 60m 策略：按整点聚合成 60m K 线，丢弃未收盘桶（收盘确认才出信号，与回测口径一致）
+        if (period == PERIOD_60M) {
+            val agg = aggregateBuckets(h, l, c, t, 3600L)
+            if (agg == null) {
+                Log.d(TAG, "detect[60m]: 聚合后无已收盘 K 线，跳过")
+                return emptyList()
+            }
+            h = agg.h
+            l = agg.l
+            c = agg.c
+            t = agg.t
+        }
+        val n = t.size
+        if (n < channelN + cciP) {
+            Log.d(TAG, "detect[$period]: bars 数量 $n < ${channelN + cciP}，跳过")
+            return emptyList()
         }
 
         val upper = ma(h, channelN)
@@ -114,7 +147,7 @@ class ChannelSignalDetector(
         val lastIdx = n - 1
         Log.d(
             TAG,
-            "detect: bars=$n initialized=$initialized seenKeys=${seenKeys.size} " +
+            "detect[$period]: bars=$n initialized=$initialized seenKeys=${seenKeys.size} " +
                 "lastBar[${formatTime(t[lastIdx])}] " +
                 "close=${String.format("%.0f", c[lastIdx])} " +
                 "color=${if (color[lastIdx].isNum()) color[lastIdx].toInt() else "NaN"} " +
@@ -126,9 +159,21 @@ class ChannelSignalDetector(
         )
 
         val out = mutableListOf<OpenSignal>()
+        // 60m 策略：计算 ATR 与三档止盈参考价位，随推送一起发出
+        val atrArr: DoubleArray? = if (period == PERIOD_60M) {
+            val prevC = ref(c, 1)
+            val tr = DoubleArray(n) { i ->
+                val hl = h[i] - l[i]
+                val pc = prevC[i]
+                if (pc.isNum()) maxOf(hl, abs(h[i] - pc), abs(l[i] - pc)) else hl
+            }
+            ma(tr, atrN)
+        } else {
+            null
+        }
         for (i in 0 until n) {
-            if (openLong[i]) addIfNew(t[i], "long", out)
-            if (openShort[i]) addIfNew(t[i], "short", out)
+            if (openLong[i]) addIfNew(t[i], "long", i, +1, c[i], atrArr, out)
+            if (openShort[i]) addIfNew(t[i], "short", i, -1, c[i], atrArr, out)
         }
         // 首次只初始化 seenKeys，不响历史开仓信号（基线语义，对齐 app.js）
         if (!initialized) {
@@ -145,12 +190,76 @@ class ChannelSignalDetector(
         return out
     }
 
-    private fun addIfNew(time: Long, kind: String, out: MutableList<OpenSignal>) {
+    private fun addIfNew(
+        time: Long,
+        kind: String,
+        idx: Int,
+        sign: Int,
+        entryPrice: Double,
+        atrArr: DoubleArray?,
+        out: MutableList<OpenSignal>,
+    ) {
         val suffix = if (kind == "long") "L" else "S"
         val key = "$time|$suffix"
-        if (seenKeys.add(key)) {
-            out.add(OpenSignal(kind, time, formatTime(time)))
+        if (!seenKeys.add(key)) return
+        var entry = Double.NaN
+        var tp1 = Double.NaN
+        var tp2 = Double.NaN
+        var tp3 = Double.NaN
+        val atrVal = atrArr?.get(idx)
+        if (atrVal != null && atrVal.isNum() && entryPrice.isNum() && tpMults.size == 3) {
+            entry = entryPrice
+            tp1 = entry + sign * tpMults[0] * atrVal
+            tp2 = entry + sign * tpMults[1] * atrVal
+            tp3 = entry + sign * tpMults[2] * atrVal
         }
+        out.add(OpenSignal(kind, time, formatTime(time), entry, tp1, tp2, tp3, period))
+    }
+
+    private class Agg(
+        val h: DoubleArray,
+        val l: DoubleArray,
+        val c: DoubleArray,
+        val t: LongArray,
+    )
+
+    /**
+     * 按 bucketSec 分桶聚合（北京时间 UTC+8 整点对齐 epoch 小时边界，与天勤 60m K 线一致）。
+     * 丢弃最后一个桶（仍在进行中），只保留已收盘 K 线。
+     */
+    private fun aggregateBuckets(
+        h: DoubleArray,
+        l: DoubleArray,
+        c: DoubleArray,
+        t: LongArray,
+        bucketSec: Long,
+    ): Agg? {
+        val times = ArrayList<Long>()
+        val highs = ArrayList<Double>()
+        val lows = ArrayList<Double>()
+        val closes = ArrayList<Double>()
+        for (i in t.indices) {
+            val b = (t[i] / bucketSec) * bucketSec
+            if (times.isEmpty() || times.last() != b) {
+                times.add(b)
+                highs.add(h[i])
+                lows.add(l[i])
+                closes.add(c[i])
+            } else {
+                val k = times.size - 1
+                if (h[i] > highs[k]) highs[k] = h[i]
+                if (l[i] < lows[k]) lows[k] = l[i]
+                closes[k] = c[i]
+            }
+        }
+        val end = times.size - 1 // 丢弃进行中桶
+        if (end <= 0) return null
+        return Agg(
+            highs.toDoubleArray().copyOf(end),
+            lows.toDoubleArray().copyOf(end),
+            closes.toDoubleArray().copyOf(end),
+            times.toLongArray().copyOf(end),
+        )
     }
 
     private fun formatTime(sec: Long): String {
@@ -162,6 +271,8 @@ class ChannelSignalDetector(
     }
 
     companion object {
+        const val PERIOD_5M = "5m"
+        const val PERIOD_60M = "60m"
         private const val TAG = "SignalDetector"
         private fun Double.isNum(): Boolean = this.isFinite()
 
