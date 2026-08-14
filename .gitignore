@@ -6,8 +6,8 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .mypy_cache/
-data/cache/
-data/raw/
+pc/data/cache/
+pc/data/raw/
 *.csv
 tmp/
 .DS_Store
@@ -15,7 +15,7 @@ tmp/
 .vscode/
 *.png
 *.html
-!server/**/*.html
+!pc/server/**/*.html
 !android/**/*.html
 
 .evolver/

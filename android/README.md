@@ -36,19 +36,19 @@
 
 ## 电脑调试（可选）
 
-仓库仍保留 `python scripts/run_ths_live.py`，用于浏览器对照盘面；**App 主路径不再连该服务**。
+仓库仍保留 `python pc/scripts/run_ths_live.py`，用于浏览器对照盘面；**App 主路径不再连该服务**。
 
 策略对拍：
 
 ```bash
-python scripts/export_strategy_compare.py
-node scripts/compare_strategy.mjs
+python pc/scripts/export_strategy_compare.py
+node pc/scripts/compare_strategy.mjs
 ```
 
 DIFF 探针（需 `.env` 里 `TQ_USER`/`TQ_PASS`）：
 
 ```bash
-python scripts/probe_diff_md.py
+python pc/scripts/probe_diff_md.py
 ```
 
 ## 注意

@@ -1,0 +1,30 @@
+{
+  "goal": 999999.0,
+  "fixed_lots": 3,
+  "hit": false,
+  "trials": 500,
+  "best": {
+    "pnl": 12609.634000000427,
+    "return_pct": 1.260963400000037,
+    "max_dd": 0.4574585499357557,
+    "closed": 162,
+    "won": 67,
+    "lost": 95,
+    "params": {
+      "channel_period": 60,
+      "cci_period": 15,
+      "cci_signal": 4,
+      "atr_period": 14,
+      "atr_mults": [
+        3,
+        6,
+        9
+      ],
+      "atr_trailing": true,
+      "entry_lots": 3,
+      "entry_mode": "color_then_cci"
+    },
+    "trial": 186
+  },
+  "hit_result": null
+}

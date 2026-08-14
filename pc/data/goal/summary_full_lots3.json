@@ -1,0 +1,32 @@
+{
+  "total_combinations": 17880,
+  "valid_count": 17880,
+  "mean_pnl_all": -1740.6988350641843,
+  "positive_frac_all": 0.32656599552572707,
+  "mean_pnl_valid": -1740.6988350641843,
+  "positive_frac_valid": 0.32656599552572707,
+  "elapsed_sec": 2608.5732147693634,
+  "best": {
+    "pnl": 16379.715750000323,
+    "return_pct": 1.63797157500003,
+    "max_dd": 0.41923201048562814,
+    "closed": 162,
+    "won": 78,
+    "lost": 84,
+    "params": {
+      "channel_period": 60,
+      "cci_period": 15,
+      "cci_signal": 4,
+      "atr_period": 20,
+      "atr_mults": [
+        1.5,
+        3,
+        5
+      ],
+      "atr_trailing": true,
+      "entry_lots": 3,
+      "entry_mode": "color_then_cci"
+    },
+    "error": null
+  }
+}
