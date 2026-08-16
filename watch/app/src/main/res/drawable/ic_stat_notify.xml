@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 系统通知小图标必须是白底透明（单色），彩色图在多数机型上会被丢弃或显示异常 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3 L4,19 L20,19 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11,10 L13,10 L13,14 L11,14 Z M11,16 L13,16 L13,18 L11,18 Z" />
+</vector>

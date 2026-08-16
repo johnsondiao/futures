@@ -24,6 +24,10 @@ android/build/
 android/app/build/
 android/local.properties
 android/**/captures/
+watch/.gradle/
+watch/build/
+watch/app/build/
+watch/local.properties
 *.apk
 *.aab
 *.jks
