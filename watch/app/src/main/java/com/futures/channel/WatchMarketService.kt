@@ -25,6 +25,8 @@ import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
+import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.Executors
 
 /**
@@ -93,6 +95,9 @@ class WatchMarketService : Service() {
     private var session: ShinnyAuth.Session? = null
     private var user: String? = null
     private var pass: String? = null
+
+    /** 节假日集合（联网拉取 + 本地缓存，用于调度跳过节假日） */
+    @Volatile private var holidays: Set<String> = emptySet()
 
     private val reconnectHandler = Handler(Looper.getMainLooper())
     private var reconnectTask: Runnable? = null
@@ -166,6 +171,7 @@ class WatchMarketService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureFgsChannel()
+        holidays = HolidayCalendar.loadCached(this)
         startWakeLockRenew()
         registerNetworkCallback()
         registerOpenAlarmReceiver()
@@ -241,7 +247,7 @@ class WatchMarketService : Service() {
                     if (sessionAllowedNow()) {
                         startMd(s)
                     } else {
-                        updateStatus("登录成功 · 当前闭市，${TradingSchedule.nextOpenText()} 自动启动")
+                        updateStatus("登录成功 · 当前闭市，${TradingSchedule.nextOpenText(holidays = holidays)} 自动启动")
                         scheduleOpenAlarm()
                     }
                 }
@@ -300,19 +306,32 @@ class WatchMarketService : Service() {
 
     // ===== 交易时段调度 =====
 
-    /** 是否允许立即跑行情：未启用时段限制，或当前在交易窗口内 */
+    /** 是否允许立即跑行情：未启用时段限制，或当前在交易窗口内（含节假日判断） */
     private fun sessionAllowedNow(): Boolean {
         val scheduled = prefs.getBoolean("run_only_in_session", true)
-        return !scheduled || TradingSchedule.isOpen()
+        return !scheduled || TradingSchedule.isOpen(holidays = holidays)
     }
 
     private fun checkSchedule() {
+        ensureHolidaysFresh()
         if (sessionAllowedNow()) {
             ensureAwake()
             ensureMarketRunning()
             resyncFeishu()
         } else {
             enterSessionClosed()
+        }
+    }
+
+    /** 节假日数据每天联网刷新一次（失败沿用缓存，不阻塞调度） */
+    private fun ensureHolidaysFresh() {
+        if (!HolidayCalendar.needRefresh(this)) return
+        io.execute {
+            val fresh = HolidayCalendar.refresh(this@WatchMarketService)
+            if (fresh != null) {
+                holidays = fresh
+                Log.i(TAG, "holidays: 已更新节假日数据 ${fresh.size} 天")
+            }
         }
     }
 
@@ -343,9 +362,15 @@ class WatchMarketService : Service() {
         mdClient = null
         feishuWs.stop()
         releaseWakeLock()
-        val msg = "闭市中 · 下次开市 ${TradingSchedule.nextOpenText()}"
+        val isHoliday = !TradingSchedule.isTradingDay(holidays = holidays) &&
+            Calendar.getInstance(TimeZone.getTimeZone("Asia/Shanghai")).let {
+                it.get(Calendar.DAY_OF_WEEK) != Calendar.SATURDAY &&
+                    it.get(Calendar.DAY_OF_WEEK) != Calendar.SUNDAY
+            }
+        val prefix = if (isHoliday) "节假日休市" else "闭市"
+        val msg = "$prefix · 下次开市 ${TradingSchedule.nextOpenText(holidays = holidays)}"
         if (_status.value != msg) {
-            Log.i(TAG, "enterSessionClosed: 进入闭市休眠，${TradingSchedule.nextOpenText()}")
+            Log.i(TAG, "enterSessionClosed: 进入休眠，${TradingSchedule.nextOpenText(holidays = holidays)}")
             updateStatus(msg)
         }
         scheduleOpenAlarm()
@@ -371,9 +396,9 @@ class WatchMarketService : Service() {
         }
     }
 
-    /** 预约下次开市窗口开始的精确闹钟（Doze 下也能唤醒） */
+    /** 预约下次开市窗口开始的精确闹钟（Doze 下也能唤醒；自动跳过节假日） */
     private fun scheduleOpenAlarm() {
-        val delay = TradingSchedule.nextOpenAt() - System.currentTimeMillis()
+        val delay = TradingSchedule.nextOpenAt(holidays = holidays) - System.currentTimeMillis()
         if (delay <= 0) {
             mainHandler.post { checkSchedule() }
             return
