@@ -1,10 +1,12 @@
 package com.futures.channel
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
@@ -17,6 +19,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +32,8 @@ import java.util.concurrent.Executors
  *
  * 与手机版 MarketForegroundService 的差异：
  *   - 无 WebView 推送（手表无图表页），行情状态/价格通过 StateFlow 暴露给 Compose UI
- *   - 不使用 AlarmManager 精确闹钟（手表电量敏感），靠前台服务 + WakeLock + 网络恢复重连保活
+ *   - **只在交易时段运行**（默认，可关）：开市窗口内持 WakeLock 跑行情；
+ *     闭市后停行情/停飞书/释放锁省电，用 AlarmManager 在下次开市前精确唤醒
  *   - 飞书推送默认关闭（避免与手机端重复推送），可在设置里打开
  */
 class WatchMarketService : Service() {
@@ -48,6 +52,11 @@ class WatchMarketService : Service() {
         private const val WAKE_LOCK_TIMEOUT_MS = 12L * 60 * 60 * 1000
         private const val WAKE_LOCK_RENEW_INTERVAL_MS = 60L * 60 * 1000
         private const val PREFS_NAME = "watch_prefs"
+
+        /** 交易时段调度：开市期间每 30s 自检一次 */
+        private const val SCHEDULE_CHECK_INTERVAL_MS = 30_000L
+        private const val ACTION_OPEN_ALARM = "com.futures.watch.OPEN_ALARM"
+        private const val ALARM_REQUEST_CODE = 4301
     }
 
     interface Listener {
@@ -99,16 +108,32 @@ class WatchMarketService : Service() {
     private val networkCallback by lazy {
         object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                Log.i(TAG, "onNetworkAvailable: 网络恢复，主动重连")
-                mainHandler.post {
-                    updateStatus("网络已恢复，重连行情…")
-                    val md = mdClient
-                    if (md == null || !md.isAlive()) scheduleReconnect() else md.pokeHeartbeat()
-                }
+                Log.i(TAG, "onNetworkAvailable: 网络恢复，触发调度检查")
+                mainHandler.post { checkSchedule() }
             }
         }
     }
     private var networkRegistered = false
+
+    private val alarmManager by lazy { getSystemService(ALARM_SERVICE) as AlarmManager }
+
+    /** 开市前精确唤醒闹钟 */
+    private val openAlarmReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ACTION_OPEN_ALARM) return
+            Log.i(TAG, "openAlarm: 开市闹钟触发，启动行情")
+            checkSchedule()
+        }
+    }
+    private var alarmRegistered = false
+
+    /** 开市期间周期性自检：维持行情连接；闭市则进入休眠 */
+    private val scheduleChecker = object : Runnable {
+        override fun run() {
+            checkSchedule()
+            mainHandler.postDelayed(this, SCHEDULE_CHECK_INTERVAL_MS)
+        }
+    }
 
     private val prefs by lazy {
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -141,10 +166,10 @@ class WatchMarketService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureFgsChannel()
-        if (!wakeLock.isHeld) wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
         startWakeLockRenew()
         registerNetworkCallback()
-        resyncFeishu()
+        registerOpenAlarmReceiver()
+        mainHandler.post(scheduleChecker)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -155,19 +180,12 @@ class WatchMarketService : Service() {
             val token = it.getStringExtra(EXTRA_ACCESS_TOKEN)
             val url = it.getStringExtra(EXTRA_MD_URL)
             if (!token.isNullOrBlank() && !url.isNullOrBlank()) {
-                startMd(ShinnyAuth.Session(token, url))
+                session = ShinnyAuth.Session(token, url)
             }
         }
-        // START_STICKY 重启时 intent==null：从持久化凭据重登
-        if (intent == null && mdClient == null) {
-            val savedUser = prefs.getString("tq_user", null)
-            val savedPass = prefs.getString("tq_pass", null)
-            if (!savedUser.isNullOrBlank() && !savedPass.isNullOrBlank()) {
-                user = savedUser
-                pass = savedPass
-                io.execute { reloginQuietly() }
-            }
-        }
+        // START_STICKY 重启 / 首次启动：统一走调度（开市则连行情，闭市则休眠）
+        mainHandler.removeCallbacks(scheduleChecker)
+        mainHandler.post(scheduleChecker)
         return START_STICKY
     }
 
@@ -179,9 +197,12 @@ class WatchMarketService : Service() {
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(scheduleChecker)
         reconnectTask?.let { reconnectHandler.removeCallbacks(it) }
         reconnectTask = null
         stopWakeLockRenew()
+        cancelOpenAlarm()
+        unregisterOpenAlarmReceiver()
         unregisterNetworkCallback()
         feishuWs.stop()
         mdClient?.destroy()
@@ -209,13 +230,21 @@ class WatchMarketService : Service() {
         prefs.edit().putString("tq_user", user).putString("tq_pass", pass).apply()
     }
 
-    /** 用已保存的凭登录并启动行情（UI 登录页调用） */
+    /** 用已保存的凭登录并启动行情（UI 登录页调用）；闭市时只存凭据，等开市自动启动 */
     fun loginAndStart(user: String, pass: String, onError: (String) -> Unit) {
         saveCredentials(user, pass)
         io.execute {
             try {
                 val s = ShinnyAuth().login(user, pass)
-                mainHandler.post { startMd(s) }
+                mainHandler.post {
+                    session = s
+                    if (sessionAllowedNow()) {
+                        startMd(s)
+                    } else {
+                        updateStatus("登录成功 · 当前闭市，${TradingSchedule.nextOpenText()} 自动启动")
+                        scheduleOpenAlarm()
+                    }
+                }
             } catch (e: Exception) {
                 mainHandler.post { onError(e.message ?: "登录失败") }
             }
@@ -262,6 +291,144 @@ class WatchMarketService : Service() {
     }
 
     fun feishuWsStatus(): String = feishuWs.statusText()
+
+    /** 设置页切换「仅开市时段运行」后立即重新调度 */
+    fun applyScheduleNow() {
+        mainHandler.removeCallbacks(scheduleChecker)
+        mainHandler.post(scheduleChecker)
+    }
+
+    // ===== 交易时段调度 =====
+
+    /** 是否允许立即跑行情：未启用时段限制，或当前在交易窗口内 */
+    private fun sessionAllowedNow(): Boolean {
+        val scheduled = prefs.getBoolean("run_only_in_session", true)
+        return !scheduled || TradingSchedule.isOpen()
+    }
+
+    private fun checkSchedule() {
+        if (sessionAllowedNow()) {
+            ensureAwake()
+            ensureMarketRunning()
+            resyncFeishu()
+        } else {
+            enterSessionClosed()
+        }
+    }
+
+    /** 开市窗口内：确保行情在跑 */
+    private fun ensureMarketRunning() {
+        val md = mdClient
+        if (md != null && md.isAlive()) return
+        val s = session
+        if (s != null) {
+            startMd(s)
+            return
+        }
+        val savedUser = user ?: prefs.getString("tq_user", null)
+        val savedPass = pass ?: prefs.getString("tq_pass", null)
+        if (!savedUser.isNullOrBlank() && !savedPass.isNullOrBlank()) {
+            user = savedUser
+            pass = savedPass
+            updateStatus("开市中 · 登录行情…")
+            io.execute { reloginQuietly() }
+        } else {
+            updateStatus("请先登录天勤账号")
+        }
+    }
+
+    /** 闭市：停行情/停飞书/释放锁省电，并预约下次开市闹钟 */
+    private fun enterSessionClosed() {
+        mdClient?.destroy()
+        mdClient = null
+        feishuWs.stop()
+        releaseWakeLock()
+        val msg = "闭市中 · 下次开市 ${TradingSchedule.nextOpenText()}"
+        if (_status.value != msg) {
+            Log.i(TAG, "enterSessionClosed: 进入闭市休眠，${TradingSchedule.nextOpenText()}")
+            updateStatus(msg)
+        }
+        scheduleOpenAlarm()
+    }
+
+    private fun ensureAwake() {
+        if (!wakeLock.isHeld) {
+            try {
+                wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+                Log.d(TAG, "ensureAwake: WakeLock 已获取")
+            } catch (e: Exception) {
+                Log.e(TAG, "ensureAwake: 获取 WakeLock 失败", e)
+            }
+        }
+    }
+
+    private fun releaseWakeLock() {
+        if (wakeLock.isHeld) {
+            try {
+                wakeLock.release()
+                Log.d(TAG, "releaseWakeLock: WakeLock 已释放（闭市省电）")
+            } catch (_: Exception) {}
+        }
+    }
+
+    /** 预约下次开市窗口开始的精确闹钟（Doze 下也能唤醒） */
+    private fun scheduleOpenAlarm() {
+        val delay = TradingSchedule.nextOpenAt() - System.currentTimeMillis()
+        if (delay <= 0) {
+            mainHandler.post { checkSchedule() }
+            return
+        }
+        val trigger = SystemClock.elapsedRealtime() + delay
+        val pi = buildOpenAlarmPendingIntent()
+        try {
+            if (alarmManager.canScheduleExactAlarmsCompat()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, pi
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP, trigger, pi
+                )
+            }
+            Log.d(TAG, "scheduleOpenAlarm: 已预约 ${delay / 60000} 分钟后唤醒")
+        } catch (e: Exception) {
+            Log.e(TAG, "scheduleOpenAlarm: 预约失败", e)
+        }
+    }
+
+    private fun cancelOpenAlarm() {
+        try { alarmManager.cancel(buildOpenAlarmPendingIntent()) } catch (_: Exception) {}
+    }
+
+    private fun buildOpenAlarmPendingIntent(): PendingIntent {
+        val intent = Intent(ACTION_OPEN_ALARM).apply { setPackage(packageName) }
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(this, ALARM_REQUEST_CODE, intent, flags)
+    }
+
+    private fun AlarmManager.canScheduleExactAlarmsCompat(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            canScheduleExactAlarms()
+        } else true
+    }
+
+    private fun registerOpenAlarmReceiver() {
+        if (alarmRegistered) return
+        val filter = android.content.IntentFilter(ACTION_OPEN_ALARM)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(openAlarmReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(openAlarmReceiver, filter)
+        }
+        alarmRegistered = true
+    }
+
+    private fun unregisterOpenAlarmReceiver() {
+        if (!alarmRegistered) return
+        try { unregisterReceiver(openAlarmReceiver) } catch (_: Exception) {}
+        alarmRegistered = false
+    }
 
     // ===== 内部 =====
 
@@ -385,8 +552,8 @@ class WatchMarketService : Service() {
     private fun scheduleReconnect() {
         reconnectTask?.let { reconnectHandler.removeCallbacks(it) }
         val r = Runnable {
-            val s = session
-            if (s != null) startMd(s) else io.execute { reloginQuietly() }
+            // 统一走调度：闭市时不会重连，改为休眠 + 预约开市闹钟
+            checkSchedule()
         }
         reconnectTask = r
         reconnectHandler.postDelayed(r, RECONNECT_DELAY_MS)
@@ -451,8 +618,11 @@ class WatchMarketService : Service() {
         val r = object : Runnable {
             override fun run() {
                 try {
-                    if (wakeLock.isHeld) wakeLock.release()
-                    wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+                    // 只在持锁（开市运行中）时续期；闭市已放锁则跳过
+                    if (wakeLock.isHeld) {
+                        wakeLock.release()
+                        wakeLock.acquire(WAKE_LOCK_TIMEOUT_MS)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "wakeLockRenew: 续期失败", e)
                 }

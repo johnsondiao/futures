@@ -321,6 +321,7 @@ private fun SettingsScreen(
 
     var alertEnabled by remember { mutableStateOf(prefs.getBoolean("alert_enabled", true)) }
     var vibrate by remember { mutableStateOf(prefs.getBoolean("alert_vibrate", true)) }
+    var runOnlyInSession by remember { mutableStateOf(prefs.getBoolean("run_only_in_session", true)) }
     var feishuEnabled by remember { mutableStateOf(prefs.getBoolean("alert_feishu_enabled", false)) }
     var feishuAppId by remember { mutableStateOf(prefs.getString("alert_feishu_app_id", "") ?: "") }
     var feishuAppSecret by remember { mutableStateOf(prefs.getString("alert_feishu_app_secret", "") ?: "") }
@@ -331,6 +332,7 @@ private fun SettingsScreen(
         prefs.edit()
             .putBoolean("alert_enabled", alertEnabled)
             .putBoolean("alert_vibrate", vibrate)
+            .putBoolean("run_only_in_session", runOnlyInSession)
             .putBoolean("alert_feishu_enabled", feishuEnabled)
             .putString("alert_feishu_app_id", feishuAppId.trim().ifBlank { null })
             .putString("alert_feishu_app_secret", feishuAppSecret.trim().ifBlank { null })
@@ -339,6 +341,7 @@ private fun SettingsScreen(
         val svc = getService()
         svc?.resyncStrategy()
         svc?.resyncFeishu()
+        svc?.applyScheduleNow()
     }
 
     Scaffold(
@@ -369,6 +372,16 @@ private fun SettingsScreen(
                     onCheckedChange = { vibrate = it; save() },
                     label = { Text("震动") },
                     toggleControl = { Switch(checked = vibrate, onCheckedChange = null) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            item {
+                ToggleChip(
+                    checked = runOnlyInSession,
+                    onCheckedChange = { runOnlyInSession = it; save() },
+                    label = { Text("仅开市时段运行") },
+                    secondaryLabel = { Text("闭市自动休眠省电，开市前自动唤醒", fontSize = 10.sp) },
+                    toggleControl = { Switch(checked = runOnlyInSession, onCheckedChange = null) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
