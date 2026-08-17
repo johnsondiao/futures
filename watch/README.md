@@ -1,6 +1,9 @@
-# 期货信号 · Watch 版（Galaxy Watch 5 / Wear OS）
+# 期货信号 · Watch 版（小米手表 5 / Wear OS 系）
 
 把手机版（`android/`）的核心功能做到手表上：**实时行情订阅 → 5m/60m 策略信号检测 → 手腕震动/通知提醒**，可选飞书推送。
+
+> 目标设备：小米手表 5（Xiaomi HyperOS，基于 Android 定制，支持 ADB 侧载 APK）。
+> 代码只用标准 Android / Wear OS API，无品牌专属依赖，理论上任何能装 APK 的手表都可用。
 
 ## 功能对照
 
@@ -25,14 +28,27 @@
 - CI：push 到 `watch/**` 自动在 GitHub Actions 构建，产物 `channel-strategy-watch-apk`
 - 本地：`cd watch; gradle assembleRelease`（需 ANDROID_HOME / JDK 17）
 
-## 安装到手表
+## 安装到小米手表 5
 
-1. 手表：设置 → 关于 → 连点版本号开启开发者模式
-2. 手机 Galaxy Wearable → 手表设置 → 开发者选项 → 打开「Wi-Fi 调试」与「ADB 调试」
-3. `adb pair <手表IP:端口>`（手表屏幕上显示配对码）→ `adb connect <手表IP:端口>`
-4. `adb install app-release.apk`
+**手表开启开发者模式（小米路径）：**
 
-也可用 Android Studio 直接 Deploy 到已连接的手表。
+1. 手表与手机连同一个 Wi-Fi
+2. 设置 → 我的设备 → 关于本机 → 找到「手表系统」，**连续点击版本号**直到提示"开发者选项已打开"
+3. 返回设置 → 最下方「开发者选项」→ 打开「**无线调试**」（同时确保 ADB 调试已开）
+4. 点「与新设备配对」，屏幕显示 IP、端口、配对码
+
+**安装（三种方式任选）：**
+
+```bash
+# 方式一：电脑 adb
+adb pair <手表IP:配对端口>     # 输入手表显示的配对码
+adb connect <手表IP:连接端口>
+adb install app-release.apk
+```
+
+- 方式二：手机装「WearOS工具箱」App → 填手表 IP/端口配对 → 安装本地 APK
+  （小米 HyperOS 可能拒绝普通 ADB 安装，若失败请在工具箱设置里打开「使用特殊的安装方式」）
+- 方式三：手表能上网时，装一个手表端文件管理器/APK 安装器从浏览器下载
 
 ## 首次使用
 
@@ -42,5 +58,9 @@
 
 ## 注意
 
+- **兼容性待实测**：小米手表 5 是 HyperOS 定制系统（非原生 Wear OS），侧载 APK 可行但
+  个别系统可能限制第三方 App 常驻；若安装或运行异常，优先尝试 WearOS工具箱的特殊安装方式
+- 小米手表没有谷歌服务框架，本应用已把 wearable 库设为可选（`required=false`），不受影响
 - 手表依赖 Wi-Fi/蓝牙网络连接；熄屏后靠前台服务 + WakeLock 保活，长时间熄屏仍可能被系统限制，重要场景建议手机端同时在线
 - 飞书推送默认关闭：手机和手表都开会收到两条
+- 若手表实在装不了 APK：备选方案是让手机端 App 推通知、由小米运动健康转发到手表（所有手表都支持通知镜像，无需装 App）
