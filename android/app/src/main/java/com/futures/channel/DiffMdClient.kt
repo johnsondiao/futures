@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 浏览器 WebSocket 无法带 Authorization，故放在原生 OkHttp。
  */
 class DiffMdClient(
-    private val symbol: String = "DCE.a2609",
+    val symbol: String = DEFAULT_SYMBOL,
     private val viewWidth: Int = 2000,
     private val onStatus: (String) -> Unit,
     private val onBars: (JSONArray) -> Unit,
@@ -33,6 +33,9 @@ class DiffMdClient(
 ) {
     companion object {
         private const val TAG = "DiffMdClient"
+
+        /** 默认交易品种（豆一 2611）；设置页 trade_symbol 可覆盖 */
+        const val DEFAULT_SYMBOL = "DCE.a2611"
         private const val DURATION_NS = 300L * 1_000_000_000L // 5m
         private const val HEARTBEAT_INTERVAL_MS = 30_000L
         private const val STALE_THRESHOLD_MS = 90_000L // 90s 无数据视为连接僵死

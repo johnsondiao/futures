@@ -25,7 +25,7 @@ def get_feed() -> LiveFeed:
     global _feed
     if _feed is None:
         _feed = LiveFeed(
-            symbol=os.getenv("THS_SYMBOL", "DCE.a2609"),
+            symbol=os.getenv("THS_SYMBOL", "DCE.a2611"),
             period=os.getenv("THS_PERIOD", "5m"),
             mode=os.getenv("THS_MODE", "auto"),
             bars=int(os.getenv("THS_BARS", "300")),

@@ -25,7 +25,7 @@ def load_cache(path: Path) -> pd.DataFrame:
     return pd.read_csv(path, parse_dates=["datetime"], index_col="datetime")
 
 
-SYMBOL = "DCE.a2609"
+SYMBOL = "DCE.a2611"
 PERIOD = "5m"
 CASH = 1_000_000.0
 
@@ -87,7 +87,7 @@ def run_once(df, params: dict) -> dict:
 
 
 def main():
-    cache = ROOT / "data" / "cache" / "DCE_a2609_5m.csv"
+    cache = ROOT / "data" / "cache" / f"{SYMBOL.replace('.', '_')}_{PERIOD}.csv"
     if not cache.exists():
         raise SystemExit(f"缺少缓存 {cache}")
     df = load_cache(cache)

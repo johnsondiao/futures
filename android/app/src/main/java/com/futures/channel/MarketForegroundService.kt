@@ -99,6 +99,11 @@ class MarketForegroundService : Service() {
     private fun currentStrategy(): String =
         prefs.getString("strategy_profile", "5m") ?: "5m"
 
+    /** 当前交易品种：设置页持久化（trade_symbol），未设置时用默认品种 */
+    private fun currentSymbol(): String =
+        prefs.getString("trade_symbol", null)?.trim()?.takeIf { it.isNotBlank() }
+            ?: DiffMdClient.DEFAULT_SYMBOL
+
     /** 设置保存后由 MainActivity 调用：策略切换时重建检测器（去重基线随之重置） */
     fun resyncStrategy() {
         val profile = currentStrategy()
@@ -108,6 +113,17 @@ class MarketForegroundService : Service() {
             Log.i(TAG, "resyncStrategy: 已切换到 $label")
             mainHandler.post { onStatusInternal("已切换到 $label") }
         }
+    }
+
+    /** 设置保存后由 MainActivity 调用：品种切换时重启行情订阅并重建检测器 */
+    fun resyncSymbol() {
+        val symbol = currentSymbol()
+        if (mdClient?.symbol == symbol) return
+        detectorRef = makeDetector() // 新品种 K 线序列不同，信号基线重置
+        Log.i(TAG, "resyncSymbol: 品种切换 → $symbol")
+        onStatusInternal("已切换品种 $symbol，重连行情…")
+        val s = session
+        if (s != null) startMd(s) else io.execute { reloginQuietly() }
     }
 
     /**
@@ -303,7 +319,7 @@ class MarketForegroundService : Service() {
         // 彻底销毁旧实例，避免 HandlerThread 泄漏
         mdClient?.destroy()
         mdClient = DiffMdClient(
-            symbol = "DCE.a2609",
+            symbol = currentSymbol(),
             onStatus = { msg -> mainHandler.post { onStatusInternal(msg) } },
             onBars = { bars -> mainHandler.post { handleBars(bars) } },
             onAuthFailure = { mainHandler.post { handleAuthFailure() } },
@@ -359,7 +375,8 @@ class MarketForegroundService : Service() {
         val label = if (sig.kind == "long") "开多" else "开空"
         // 周期文案取自信号本身（而非当前 detector），避免切换策略瞬间标错
         val periodLabel = if (sig.period == ChannelSignalDetector.PERIOD_60M) "60分钟" else "5分钟"
-        val body = "DCE.a2609 ${periodLabel}K线出现「${label}」标记 · ${sig.barTime}"
+        val symbol = currentSymbol()
+        val body = "$symbol ${periodLabel}K线出现「${label}」标记 · ${sig.barTime}"
         val posted = notifier.notifyOpen(
             kind = sig.kind,
             title = "${label}信号",
@@ -385,7 +402,7 @@ class MarketForegroundService : Service() {
                     body = body,
                     extraLines = buildList {
                         add("信号时间: ${sig.barTime}")
-                        add("合约: DCE.a2609 (豆二 2609)")
+                        add("合约: $symbol")
                         add("周期: ${periodLabel} K线")
                         if (sig.entry.isFinite()) {
                             add("参考开仓: ${String.format("%.0f", sig.entry)}")

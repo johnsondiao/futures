@@ -2,7 +2,7 @@
 
 用法:
   python pc/scripts/goal_search.py
-  python pc/scripts/goal_search.py --goal 10000 --symbol DCE.a2609
+  python pc/scripts/goal_search.py --goal 10000 --symbol DCE.a2611
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def param_grid(seed: int = 42, fixed_lots: int | None = 3):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", default="DCE.a2609")
+    parser.add_argument("--symbol", default="DCE.a2611")
     parser.add_argument("--period", default="5m")
     parser.add_argument("--goal", type=float, default=10000.0)
     parser.add_argument("--bars", type=int, default=8000)

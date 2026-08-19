@@ -1,4 +1,4 @@
-"""回测：通道 + CCI + ATR 分批止盈。默认豆一 DCE.a2609 / 5m。"""
+"""回测：通道 + CCI + ATR 分批止盈。默认豆一 DCE.a2611 / 5m。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _trade_summary(trades) -> None:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", default="DCE.a2609")
+    parser.add_argument("--symbol", default="DCE.a2611")
     parser.add_argument("--period", default="5m", choices=["5m", "60m", "1d"])
     parser.add_argument("--bars", type=int, default=8000)
     parser.add_argument("--cash", type=float, default=1_000_000.0)

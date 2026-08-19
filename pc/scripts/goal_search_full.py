@@ -6,7 +6,7 @@
   保证在这份网格 + 这份数据上找到的是真正的 grid-optimal，而不是抽样最优。
 
 用法:
-  python pc/scripts/goal_search_full.py --symbol DCE.a2609 --period 5m --lots 3 --workers 12
+  python pc/scripts/goal_search_full.py --symbol DCE.a2611 --period 5m --lots 3 --workers 12
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def _worker(params: dict) -> dict:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", default="DCE.a2609")
+    parser.add_argument("--symbol", default="DCE.a2611")
     parser.add_argument("--period", default="5m")
     parser.add_argument("--bars", type=int, default=8000)
     parser.add_argument("--lots", type=int, default=3, help="固定开仓手数；0=手数也纳入穷举")

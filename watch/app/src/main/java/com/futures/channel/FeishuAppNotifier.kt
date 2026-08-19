@@ -172,7 +172,7 @@ class FeishuAppNotifier {
     /**
      * 用于设置页「测试推送」按钮：同步调用，直接返回结果信息给 UI 展示。
      */
-    fun test(appId: String, appSecret: String, openId: String): String {
+    fun test(appId: String, appSecret: String, openId: String, symbol: String = DiffMdClient.DEFAULT_SYMBOL): String {
         return runCatching {
             val token = getToken(appId, appSecret)
                 ?: return@runCatching "❌ 获取 tenant_access_token 失败，请检查 App ID / App Secret"
@@ -183,7 +183,7 @@ class FeishuAppNotifier {
                 extraLines = listOf(
                     "配置时间: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.CHINA)
                         .format(java.util.Date())}",
-                    "当前合约: DCE.a2609",
+                    "当前合约: $symbol",
                     "open_id: ${openId.take(16)}…"
                 )
             )

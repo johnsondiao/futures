@@ -11,6 +11,7 @@
     feishu_open_id: "",
     feishu_state: "",
     strategy: "5m",
+    trade_symbol: "DCE.a2611",
   };
 
   const LS_KEY = "channel_alert_settings_v1";
@@ -70,6 +71,7 @@
     const fieldMap = {
       setFeishuAppId: "feishu_app_id",
       setFeishuAppSecret: "feishu_app_secret",
+      setTradeSymbol: "trade_symbol",
     };
     for (const id of Object.keys(fieldMap)) {
       const el = document.getElementById(id);
@@ -139,6 +141,11 @@
       feishu_open_id: alertSettings.feishu_open_id || "",
       // 策略选择由分段按钮控制，保留当前值
       strategy: alertSettings.strategy === "60m" ? "60m" : "5m",
+      // 交易品种：留空时由原生端回退默认品种
+      trade_symbol: (function () {
+        const el = document.getElementById("setTradeSymbol");
+        return el ? (el.value || "").trim() : alertSettings.trade_symbol || "";
+      })(),
     };
     pushNative();
     paintSettings();
@@ -258,7 +265,7 @@
       const el = document.getElementById(id);
       if (el) el.addEventListener("change", readSettingsFromUi);
     });
-    ["setFeishuAppId", "setFeishuAppSecret"].forEach(bindInputWithDebounce);
+    ["setFeishuAppId", "setFeishuAppSecret", "setTradeSymbol"].forEach(bindInputWithDebounce);
 
     const testBtn = document.getElementById("btnTestAlert");
     if (testBtn) {

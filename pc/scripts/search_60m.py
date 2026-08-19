@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT))
 from src.data.bt_feed import TIMEFRAME_MAP, make_data  # noqa: E402
 from strategies.channel_trend import ChannelCciAtrStrategy  # noqa: E402
 
-SYMBOL = "DCE.a2609"
+SYMBOL = "DCE.a2611"
 PERIOD = "60m"
 CASH = 1_000_000.0
 LOTS = 3

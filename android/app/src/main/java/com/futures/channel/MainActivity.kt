@@ -356,12 +356,21 @@ class MainActivity : AppCompatActivity() {
         if (now - lastPushMs < 400) return
         lastPushMs = now
         val meta = JSONObject()
-            .put("symbol", "DCE.a2609")
+            .put("symbol", currentSymbol())
             .put("source", "device")
         val js =
             "window.__onRawBars && window.__onRawBars($bars, $meta);"
         webView.evaluateJavascript(js, null)
     }
+
+    /** 当前交易品种：设置页持久化（trade_symbol），未设置时用默认品种 */
+    private fun currentSymbol(): String =
+        prefs.getString("trade_symbol", null)?.trim()?.takeIf { it.isNotBlank() }
+            ?: DiffMdClient.DEFAULT_SYMBOL
+
+    /** 品种代码基本校验：交易所.品种月份（如 DCE.a2611），也支持天勤主力连续（KQ.m@DCE.a） */
+    private fun isValidSymbol(s: String): Boolean =
+        s.isNotBlank() && !s.contains(Regex("\\s")) && s.contains(".")
 
     inner class Bridge {
         @JavascriptInterface
@@ -471,6 +480,7 @@ class MainActivity : AppCompatActivity() {
                 )
                 .put("feishu_diag", service?.feishuDiagnosis() ?: "")
                 .put("strategy", prefs.getString("strategy_profile", "5m") ?: "5m")
+                .put("trade_symbol", currentSymbol())
                 .toString()
         }
 
@@ -490,6 +500,14 @@ class MainActivity : AppCompatActivity() {
                         "strategy_profile",
                         if (o.optString("strategy") == "60m") "60m" else "5m"
                     )
+                // 交易品种：合法则保存；空/非法回退默认品种（绝不含空格，带 "." 分隔）
+                val sym = o.optString("trade_symbol", "").trim()
+                if (sym.isEmpty()) {
+                    editor.putString("trade_symbol", null)
+                } else if (isValidSymbol(sym)) {
+                    editor.putString("trade_symbol", sym)
+                }
+                editor
                     .putString(
                         "alert_feishu_app_id",
                         o.optString("feishu_app_id", "").trim().ifBlank { null }
@@ -511,6 +529,8 @@ class MainActivity : AppCompatActivity() {
                 mainHandler.post { service?.resyncFeishu() }
                 // 策略选择变化后重建信号检测器
                 mainHandler.post { service?.resyncStrategy() }
+                // 品种变化后重启行情订阅（未变时无副作用）
+                mainHandler.post { service?.resyncSymbol() }
             } catch (_: Exception) {
             }
         }
@@ -536,7 +556,7 @@ class MainActivity : AppCompatActivity() {
                 return
             }
             io.execute {
-                val result = feishuNotifier.test(appId.trim(), appSecret.trim(), oid)
+                val result = feishuNotifier.test(appId.trim(), appSecret.trim(), oid, currentSymbol())
                 val ok = result.startsWith("✅")
                 val json = JSONObject().put("ok", ok).put("msg", result)
                 val js = "$callback && $callback($json);"

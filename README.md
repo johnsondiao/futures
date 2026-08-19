@@ -28,8 +28,8 @@ copy pc\.env.example pc\.env      # 填入快期账号密码
 ## 常用命令
 
 ```bash
-python pc/scripts/run_backtest.py --symbol DCE.a2609 --period 5m    # 或 --period 60m
-python pc/scripts/export_chart.py --symbol DCE.a2609 --period 5m --open
+python pc/scripts/run_backtest.py --symbol DCE.a2611 --period 5m    # 或 --period 60m
+python pc/scripts/export_chart.py --symbol DCE.a2611 --period 5m --open
 python pc/scripts/ths_indicator_sim.py --bars 500 --open
 python pc/scripts/run_ths_live.py --host 0.0.0.0 --port 8080        # 可选：浏览器对照盘面
 python pc/scripts/delay_sensitivity.py --period 60m                 # 开仓延迟敏感性
@@ -49,5 +49,5 @@ python pc/scripts/delay_sensitivity.py --period 60m                 # 开仓延�
 
 同花顺：公式管理 → 新建主图/副图 → 粘贴对应 txt → 编译，图表用 **5 分钟**。
 
-回测图：`pc/data/reports/DCE_a2609_5m_chart.html`
+回测图：`pc/data/reports/DCE_a2611_5m_chart.html`
 安卓 App：见 [`android/README.md`](android/README.md)（本机直连天勤，GitHub Actions 编译 APK）

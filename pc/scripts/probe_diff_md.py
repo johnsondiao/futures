@@ -30,7 +30,7 @@ async def main() -> None:
         "User-Agent": "tqsdk-python probe",
         "Accept": "application/json",
     }
-    symbol = "DCE.a2609"
+    symbol = "DCE.a2611"
     duration_ns = 5 * 60 * 10**9  # 5m
     async with websockets.connect(md_url, additional_headers=headers, max_size=None) as ws:
         await ws.send(json.dumps({"aid": "peek_message"}))

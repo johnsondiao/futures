@@ -1,7 +1,7 @@
 """导出可缩放回测网页图：K线 + 通道 + 开平仓标记 + 盈亏。
 
 用法:
-  python pc/scripts/export_chart.py --symbol DCE.a2609 --period 5m --open
+  python pc/scripts/export_chart.py --symbol DCE.a2611 --period 5m --open
 """
 
 from __future__ import annotations
@@ -402,7 +402,7 @@ def build_html(df: pd.DataFrame, series, fills, trades, meta: dict, out_path: Pa
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--symbol", default="DCE.a2609")
+    parser.add_argument("--symbol", default="DCE.a2611")
     parser.add_argument("--period", default="5m")
     parser.add_argument("--bars", type=int, default=8000)
     parser.add_argument("--cash", type=float, default=1_000_000.0)

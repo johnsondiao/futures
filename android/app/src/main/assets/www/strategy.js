@@ -939,7 +939,7 @@
     });
     return {
       source: "device",
-      symbol: (global.CHANNEL_CFG && global.CHANNEL_CFG.symbol) || "DCE.a2609",
+      symbol: (global.CHANNEL_CFG && global.CHANNEL_CFG.symbol) || "DCE.a2611",
       period: prof.period,
       status,
       analytics,

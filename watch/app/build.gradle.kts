@@ -11,8 +11,8 @@ android {
         applicationId = "com.futures.watch"
         minSdk = 30          // Wear OS 3+（Galaxy Watch 5 为 Wear 3.5/4）
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     // 个人分发：用 debug 密钥签 release，避免 unsigned APK 安装失败

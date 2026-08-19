@@ -58,7 +58,7 @@
     <p id="analyticsNote" class="hint"></p>
   </section>
 
-  <footer class="foot">v2.3.2 · 止盈 1.5/3/5×ATR(20) · 本机策略 · 下拉刷新重连</footer>
+  <footer class="foot">v2.4.0 · 止盈 1.5/3/5×ATR(20) · 本机策略 · 下拉刷新重连</footer>
   <div id="alertToast" class="alert-toast" hidden></div>
   <div id="feishuToast" class="alert-toast feishu" hidden></div>
 
@@ -69,6 +69,21 @@
       <h2>设置</h2>
     </div>
     <div class="panel-body">
+      <h3 class="panel-section-title">交易品种</h3>
+      <p class="panel-desc">盘面订阅与信号提醒使用的合约代码，修改后自动重连行情。</p>
+      <div class="input-row">
+        <label for="setTradeSymbol" class="input-label">合约代码</label>
+        <input
+          type="text"
+          id="setTradeSymbol"
+          class="text-input"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="DCE.a2611"
+        />
+      </div>
+      <small class="input-hint">格式：交易所.品种月份，如 DCE.a2611（豆一 2611）、SHFE.rb2701；也支持天勤主力连续 KQ.m@DCE.a。留空恢复默认品种。</small>
+
       <h3 class="panel-section-title">策略选择</h3>
       <p class="panel-desc">选择要运行的策略，选择会自动记住。盘面标记、条件单卡片与信号提醒都跟随所选策略。</p>
       <div class="seg-row">
@@ -237,7 +252,7 @@
         <h3>这是什么策略？</h3>
         <p>在 <strong>5 分钟</strong> K 线上，用「均线高低通道」判断多空方向，再用 <strong>CCI</strong> 交叉确认后开仓；持仓后按 <strong>ATR</strong> 分三档止盈，若趋势反向变色则平掉剩余仓。</p>
         <ul class="guide-params">
-          <li>合约示例：豆一（App 默认 DCE.a2609）</li>
+          <li>合约：可在「设置 → 交易品种」修改（默认 DCE.a2611）</li>
           <li>开仓：固定 <strong>3 手</strong></li>
           <li>通道 N=<strong>60</strong> · CCI(<strong>15</strong>)/均线(<strong>4</strong>)</li>
           <li>止盈：<strong>1.5 / 3 / 5 × ATR(20)</strong>，各平 1 手</li>

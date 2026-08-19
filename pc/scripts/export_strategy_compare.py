@@ -12,7 +12,7 @@ from src.data.tq_loader import load_cache
 from src.ths_sim.formula_main import compute_main_chart, last_bar_status
 from src.ths_sim.signal_analytics import analyze_signal
 
-cache = ROOT / "data" / "cache" / "DCE_a2609_5m.csv"
+cache = ROOT / "data" / "cache" / "DCE_a2611_5m.csv"
 df = load_cache(str(cache))
 ind = compute_main_chart(df)
 status = last_bar_status(ind)

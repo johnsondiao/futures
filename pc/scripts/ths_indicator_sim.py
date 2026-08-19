@@ -179,7 +179,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="同花顺主图指标本地模拟器")
     parser.add_argument(
         "--cache",
-        default=str(ROOT / "data" / "cache" / "DCE_a2609_5m.csv"),
+        default=str(ROOT / "data" / "cache" / "DCE_a2611_5m.csv"),
         help="K线缓存 CSV",
     )
     parser.add_argument("--bars", type=int, default=500, help="只显示最近 N 根")

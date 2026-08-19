@@ -26,6 +26,8 @@ from src.data.bt_feed import TIMEFRAME_MAP, make_data  # noqa: E402
 from src.data.tq_loader import load_cache  # noqa: E402
 from strategies.channel_trend import ChannelCciAtrStrategy  # noqa: E402
 
+SYMBOL = "DCE.a2611"
+
 
 class DelayedEntryStrategy(ChannelCciAtrStrategy):
     params = (("delay_bars", 0),)
@@ -66,7 +68,7 @@ class DelayedEntryStrategy(ChannelCciAtrStrategy):
 def run_one(df, delay_bars: int, slip_perc: float, period: str, channel: int,
             cci: int, cci_signal: int, mults: tuple) -> dict:
     tf, comp = TIMEFRAME_MAP[period]
-    data = make_data(df, name=f"a2609_{period}", timeframe=tf, compression=comp)
+    data = make_data(df, name=f"{SYMBOL.replace('.', '_')}_{period}", timeframe=tf, compression=comp)
     cerebro = bt.Cerebro(stdstats=False)
     cerebro.adddata(data)
     cerebro.addstrategy(
@@ -117,7 +119,7 @@ def main():
     cci = args.cci if args.cci is not None else profile["cci_period"]
     cci_signal = args.cci_signal if args.cci_signal is not None else profile["cci_signal"]
 
-    cache = ROOT / "data" / "cache" / f"DCE_a2609_{args.period}.csv"
+    cache = ROOT / "data" / "cache" / f"{SYMBOL.replace('.', '_')}_{args.period}.csv"
     df = load_cache(cache)
     mults = tuple(args.mults) if args.mults is not None else tuple(profile["atr_mults"])
     print(f"数据: {df.index[0]} → {df.index[-1]}  共 {len(df)} 根 {args.period} K 线")

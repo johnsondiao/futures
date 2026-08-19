@@ -272,6 +272,11 @@ class WatchMarketService : Service() {
     private fun currentStrategy(): String =
         prefs.getString("strategy_profile", "5m") ?: "5m"
 
+    /** 当前交易品种：设置页持久化（trade_symbol），未设置时用默认品种 */
+    fun currentSymbol(): String =
+        prefs.getString("trade_symbol", null)?.trim()?.takeIf { it.isNotBlank() }
+            ?: DiffMdClient.DEFAULT_SYMBOL
+
     fun currentProfile(): String = currentStrategy()
 
     /** 设置保存后由 MainActivity 调用：策略切换时重建检测器 */
@@ -281,6 +286,21 @@ class WatchMarketService : Service() {
             detectorRef = makeDetector()
             Log.i(TAG, "resyncStrategy: 已切换到 $profile")
             updateStatus("已切换到 ${if (profile == "60m") "60 分钟" else "5 分钟"}策略")
+        }
+    }
+
+    /** 设置保存后由 MainActivity 调用：品种切换时重启行情订阅并重建检测器 */
+    fun resyncSymbol() {
+        val symbol = currentSymbol()
+        if (mdClient?.symbol == symbol) return
+        detectorRef = makeDetector() // 新品种 K 线序列不同，信号基线重置
+        Log.i(TAG, "resyncSymbol: 品种切换 → $symbol")
+        if (sessionAllowedNow()) {
+            updateStatus("已切换品种 $symbol，重连行情…")
+            val s = session
+            if (s != null) startMd(s) else io.execute { reloginQuietly() }
+        } else {
+            updateStatus("已切换品种 $symbol，下次开市生效")
         }
     }
 
@@ -461,7 +481,7 @@ class WatchMarketService : Service() {
         this.session = session
         mdClient?.destroy()
         mdClient = DiffMdClient(
-            symbol = "DCE.a2609",
+            symbol = currentSymbol(),
             onStatus = { msg -> mainHandler.post { updateStatus(msg) } },
             onBars = { bars -> mainHandler.post { handleBars(bars) } },
             onAuthFailure = { mainHandler.post { handleAuthFailure() } },
@@ -508,7 +528,8 @@ class WatchMarketService : Service() {
 
         val label = if (sig.kind == "long") "开多" else "开空"
         val periodLabel = if (sig.period == ChannelSignalDetector.PERIOD_60M) "60分钟" else "5分钟"
-        val body = "DCE.a2609 ${periodLabel}K线出现「${label}」标记 · ${sig.barTime}"
+        val symbol = currentSymbol()
+        val body = "$symbol ${periodLabel}K线出现「${label}」标记 · ${sig.barTime}"
         val posted = notifier.notifyOpen(
             kind = sig.kind,
             title = "${label}信号",
@@ -532,7 +553,7 @@ class WatchMarketService : Service() {
                     body = body,
                     extraLines = buildList {
                         add("信号时间: ${sig.barTime}")
-                        add("合约: DCE.a2609 (豆二 2609)")
+                        add("合约: $symbol")
                         add("周期: ${periodLabel} K线")
                         if (sig.entry.isFinite()) {
                             add("参考开仓: ${String.format("%.0f", sig.entry)}")

@@ -159,6 +159,10 @@ private fun WatchRoot(
         )
     }
     val strategy = remember(screen) { prefs.getString("strategy_profile", "5m") ?: "5m" }
+    val symbol = remember(screen) {
+        prefs.getString("trade_symbol", null)?.trim()?.takeIf { it.isNotBlank() }
+            ?: DiffMdClient.DEFAULT_SYMBOL
+    }
 
     when (screen) {
         Screen.LOGIN -> LoginScreen(
@@ -170,6 +174,7 @@ private fun WatchRoot(
             price = price,
             signal = signal,
             strategy = strategy,
+            symbol = symbol,
             openSettings = { screen = Screen.SETTINGS },
         )
         Screen.SETTINGS -> SettingsScreen(
@@ -185,6 +190,7 @@ private fun HomeScreen(
     price: Double?,
     signal: ChannelSignalDetector.OpenSignal?,
     strategy: String,
+    symbol: String,
     openSettings: () -> Unit,
 ) {
     Scaffold(timeText = { TimeText() }) {
@@ -196,7 +202,7 @@ private fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = if (strategy == "60m") "60 分钟策略 · 通道+CCI" else "5 分钟策略 · 通道+CCI",
+                text = "$symbol · " + if (strategy == "60m") "60 分钟策略" else "5 分钟策略",
                 fontSize = 11.sp,
                 color = Color(0xFF9AA0A6),
             )
@@ -326,7 +332,21 @@ private fun SettingsScreen(
     var feishuAppId by remember { mutableStateOf(prefs.getString("alert_feishu_app_id", "") ?: "") }
     var feishuAppSecret by remember { mutableStateOf(prefs.getString("alert_feishu_app_secret", "") ?: "") }
     var strategy by remember { mutableStateOf(prefs.getString("strategy_profile", "5m") ?: "5m") }
+    var tradeSymbol by remember { mutableStateOf(prefs.getString("trade_symbol", "") ?: "") }
+    var symbolError by remember { mutableStateOf<String?>(null) }
     val listState = rememberScalingLazyListState()
+
+    /** 保存交易品种：格式合法才写入；留空回退默认品种 */
+    fun saveSymbol() {
+        val sym = tradeSymbol.trim()
+        if (sym.isNotEmpty() && (sym.contains(Regex("\\s")) || !sym.contains("."))) {
+            symbolError = "格式如 DCE.a2611"
+            return
+        }
+        symbolError = null
+        prefs.edit().putString("trade_symbol", sym.ifBlank { null }).apply()
+        getService()?.resyncSymbol()
+    }
 
     fun save() {
         prefs.edit()
@@ -356,6 +376,19 @@ private fun SettingsScreen(
         ) {
             item {
                 Text("设置", fontSize = 14.sp, color = Color.White)
+            }
+            item {
+                WearInput("交易品种", tradeSymbol) { tradeSymbol = it; symbolError = null }
+            }
+            item {
+                symbolError?.let {
+                    Text(it, fontSize = 10.sp, color = Color(0xFFEF5350), textAlign = TextAlign.Center)
+                }
+            }
+            item {
+                Button(onClick = { saveSymbol() }, modifier = Modifier.fillMaxWidth()) {
+                    Text("保存品种（默认 DCE.a2611）", fontSize = 11.sp)
+                }
             }
             item {
                 ToggleChip(

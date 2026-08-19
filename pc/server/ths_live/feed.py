@@ -62,7 +62,7 @@ def _ind_to_payload(ind: pd.DataFrame, bars: int = 300) -> dict[str, Any]:
 
 @dataclass
 class LiveFeed:
-    symbol: str = "DCE.a2609"
+    symbol: str = "DCE.a2611"
     period: str = "5m"
     data_length: int = 2000
     bars: int = 300
