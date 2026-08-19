@@ -1,0 +1,47 @@
+---
+description: 同花顺/期货通公式语法坑——改 docs/同花顺*.txt 时必读
+globs: docs/同花顺*.txt
+alwaysApply: false
+---
+
+# 同花顺公式语法（本仓库实测）
+
+写/改 `docs/同花顺_*.txt` 时按下面约束；**不要照搬通达信习惯**。
+
+## 禁止 / 必改
+
+| 错误写法 | 正确写法 | 报错/后果 |
+|----------|----------|-----------|
+| `NOT REF(X,1)` / `NOT达标` | `NOT(REF(X,1))` / `NOT(达标)` | `NOTREF` 等「函数未定义」——`NOT` 必须是函数调用 |
+| `DRAWNUMBER(...)` | **不要用** | 「参数数量错误」——本机同花顺不支持 |
+| `DRAWBAND(...)` | **不要用** | 「函数未定义」 |
+| `FILLRGN(..., COLORLIRED)` | **不要用**；本机无可靠色带填充 | `COLORLIRED` 会被当成数值0，整屏从0涂到现价 |
+| `'文字'+TOSTRING(价,0)` 拼进 DRAWTEXT | **不要用** | 易报「'某某' 函数未定义」 |
+
+## 通道画法（已验证）
+
+只画红/绿上下两条线，**不要做区域填充**（DRAWBAND/FILLRGN/STICKLINE竖条均翻过车）：
+
+```text
+上轨红:IF(色值>0,上轨线,DRAWNULL),COLORRED,LINETHICK2;
+下轨红:IF(色值>0,下轨线,DRAWNULL),COLORRED,LINETHICK2;
+上轨绿:IF(色值<0,上轨线,DRAWNULL),COLORGREEN,LINETHICK2;
+下轨绿:IF(色值<0,下轨线,DRAWNULL),COLORGREEN,LINETHICK2;
+```
+
+历史 `DRAWTEXT` 必须加 `CURRBARSCOUNT<=80`，否则全历史字幕叠成一片。
+
+## 止损价
+
+`条件止损价` 用 `COLORMAGENTA`，不要 `COLORWHITE`。多=下轨，空=上轨。
+
+## 条件单图例
+
+最多三行：`条件开仓价` `条件止盈价` `条件止损价`。
+
+## 改完自检
+
+- [ ] 无 `DRAWBAND` / `FILLRGN` / `DRAWNUMBER` / `TOSTRING`
+- [ ] 无 `NOT ` 空格写法——一律 `NOT(...)`
+- [ ] `DRAWTEXT` 字符串无英文 `:`、无拼接
+- [ ] 历史字幕带 `CURRBARSCOUNT<=80`

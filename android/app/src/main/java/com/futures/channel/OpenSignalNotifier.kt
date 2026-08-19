@@ -169,8 +169,7 @@ class OpenSignalNotifier(private val context: Context) {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(false)
-            .setOngoing(true) // 常驻通知：小米 HyperOS 灵动岛只接管常驻通知
+            .setAutoCancel(true) // 点击后自动清除（ongoing 通知不会被小米运动健康转发到手表）
             .setContentIntent(pi)
             .setFullScreenIntent(fullScreenPi, true) // 全屏弹出
             .setColor(color)
